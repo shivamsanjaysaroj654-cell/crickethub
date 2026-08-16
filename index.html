@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cricket Hub — Auction, Tournaments & Live Scores</title>
+  <meta name="description" content="The ultimate cricket management platform featuring player auctions, tournament organization, real-time scorecards, stats, and quick matches.">
+  <meta name="keywords" content="cricket, auction, tournament, live score, scorecard, IPL">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ========== LOADER ========== -->
+<div id="loader" class="loader">
+  <div class="loader-content">
+    <div class="loader-ball">🏏</div>
+    <p class="loader-text">Cricket Hub</p>
+    <div class="loader-bar"><div class="loader-fill"></div></div>
+  </div>
+</div>
+
+<!-- ========== NAVBAR ========== -->
+<nav class="navbar" id="navbar">
+  <div class="nav-brand" data-route="home">
+    <span class="brand-icon">🏏</span>
+    <span class="brand-name">Cricket<span class="brand-accent">Hub</span></span>
+  </div>
+  <div class="live-pill" id="live-pill" style="display:none">
+    <span class="pulse-dot"></span>
+    <span id="live-count">0</span> LIVE
+  </div>
+  <div class="nav-links" id="nav-links">
+    <a class="nav-link active" data-route="home" id="nav-home">
+      <span class="nav-icon">🏠</span><span>Home</span>
+    </a>
+    <a class="nav-link" data-route="players" id="nav-players">
+      <span class="nav-icon">👤</span><span>Players</span>
+    </a>
+    <a class="nav-link" data-route="auction" id="nav-auction">
+      <span class="nav-icon">🔨</span><span>Auction</span>
+    </a>
+    <a class="nav-link" data-route="tournament" id="nav-tournament">
+      <span class="nav-icon">🏆</span><span>Tournaments</span>
+    </a>
+    <a class="nav-link" data-route="quickmatch" id="nav-quickmatch">
+      <span class="nav-icon">⚡</span><span>Quick Match</span>
+    </a>
+    <a class="nav-link" data-route="scores" id="nav-scores">
+      <span class="nav-icon">📊</span><span>Live Scores</span>
+    </a>
+    <a class="nav-link" data-route="stats" id="nav-stats">
+      <span class="nav-icon">📈</span><span>Stats Hub</span>
+    </a>
+  </div>
+  <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- ========== MOBILE NAV ========== -->
+<div class="mobile-nav" id="mobile-nav">
+  <a class="mobile-nav-link" data-route="home">🏠 Home</a>
+  <a class="mobile-nav-link" data-route="players">👤 Players</a>
+  <a class="mobile-nav-link" data-route="auction">🔨 Auction</a>
+  <a class="mobile-nav-link" data-route="tournament">🏆 Tournaments</a>
+  <a class="mobile-nav-link" data-route="quickmatch">⚡ Quick Match</a>
+  <a class="mobile-nav-link" data-route="scores">📊 Live Scores</a>
+  <a class="mobile-nav-link" data-route="stats">📈 Stats Hub</a>
+</div>
+
+<!-- ========== MAIN ========== -->
+<main class="main" id="main">
+  <section id="section-home" class="section active"></section>
+  <section id="section-players" class="section"></section>
+  <section id="section-auction" class="section"></section>
+  <section id="section-tournament" class="section"></section>
+  <section id="section-quickmatch" class="section"></section>
+  <section id="section-scores" class="section"></section>
+  <section id="section-stats" class="section"></section>
+</main>
+
+<!-- ========== MODAL ========== -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box" id="modal-box">
+    <button class="modal-close-btn" id="modal-close">✕</button>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ========== SCORING OVERLAY ========== -->
+<div class="scoring-overlay" id="scoring-overlay">
+  <div class="scoring-panel" id="scoring-panel"></div>
+</div>
+
+<!-- ========== TOAST CONTAINER ========== -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
