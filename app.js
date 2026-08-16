@@ -1,7 +1,7 @@
 /* ============================================================
    CRICKET HUB — APP.JS
-   Professional Engine: Failsafe Loading, Public/Private UI Separation,
-   NRR Math, Auction Imports, and Image Avatars.
+   Fixed Layout, Restored Features, Public/Private Hubs,
+   NRR Math, Smart Extras, Undo System, & Broadcast Scorecard
    ============================================================ */
 'use strict';
 
@@ -50,10 +50,12 @@ const App = {
   initLiveSync() {
     if (!window.FirebaseDB) return;
 
-    const exitBtn = el('exit-private-btn');
-    if (exitBtn) exitBtn.style.display = App.state.currentRoom === 'public' ? 'none' : 'block';
+    // Toggle the Global Exit button safely inside the standard nav menus
+    const isPriv = App.state.currentRoom !== 'public';
+    const exitBtn = el('exit-private-btn'); if (exitBtn) exitBtn.style.display = isPriv ? 'inline-block' : 'none';
+    const exitBtnMob = el('exit-private-btn-mob'); if (exitBtnMob) exitBtnMob.style.display = isPriv ? 'block' : 'none';
 
-    const dbPath = App.state.currentRoom === 'public' ? 'crickethub_live_data' : `crickethub_rooms/${App.state.currentRoom}`;
+    const dbPath = isPriv ? `crickethub_rooms/${App.state.currentRoom}` : 'crickethub_live_data';
     const dbRef = window.FirebaseRef(window.FirebaseDB, dbPath);
 
     window.FirebaseOnValue(dbRef, (snapshot) => {
@@ -63,9 +65,6 @@ const App = {
       App.state.tournaments = data.tournaments || [];
       App.state.matches = data.matches || [];
 
-      // Update Nav visibility based on Room state
-      App.updateNavVisibility();
-
       const route = App.state.activeRoute;
       const renderers = { home: Home, players: Players, auction: Auction, tournament: Tournament, quickmatch: QuickMatch, scores: Scores, stats: Stats, room: RoomManager, profile: MyProfile };
       if (renderers[route]) renderers[route].render();
@@ -74,13 +73,6 @@ const App = {
       if (App.state.activeScoringMatchId && el('scoring-overlay').classList.contains('active')) {
         QuickMatch.renderScoringPanel(App.state.activeScoringMatchId);
       }
-    });
-  },
-
-  updateNavVisibility() {
-    const isPublic = this.state.currentRoom === 'public';
-    document.querySelectorAll('[data-route="players"], [data-route="auction"], [data-route="tournament"], [data-route="stats"]').forEach(el => {
-      el.style.display = isPublic ? 'none' : 'block';
     });
   },
 
@@ -130,8 +122,8 @@ const RoomManager = {
         <div class="card" style="text-align:center; padding: 2rem; margin-bottom: 2rem; border: 2px solid ${isPublic ? 'var(--border)' : 'var(--gold)'}">
             <div style="font-size: 0.9rem; color: var(--text-2); font-weight: 700; letter-spacing: 1px;">CURRENT HUB</div>
             <div style="font-size: 2.5rem; font-weight: 900; color: ${isPublic ? 'var(--text)' : 'var(--gold)'}; margin: 0.5rem 0;">${isPublic ? '🌍 GLOBAL PUBLIC HUB' : `🔒 PRIVATE ROOM: ${App.state.currentRoom}`}</div>
-            <p style="color:var(--text-2); font-size: 0.9rem; margin-bottom: 1.5rem;">${isPublic ? 'You are in the Public space. Tournaments and Auctions are hidden for viewers. Use a Private Hub to manage leagues.' : 'You are in a Private Hub. All Admin features (Auctions, Tournaments, Stats) are fully unlocked!'}</p>
-            ${!isPublic ? `<button class="btn btn-outline" onclick="RoomManager.switchRoom('public')">Return to Global Hub</button>` : ''}
+            <p style="color:var(--text-2); font-size: 0.9rem; margin-bottom: 1.5rem;">${isPublic ? 'You are in the Public space. You can view all global matches and stats here.' : 'You are in a Private Hub. You have full admin rights to create players, auctions, and tournaments here!'}</p>
+            ${!isPublic ? `<button class="btn btn-red" onclick="RoomManager.switchRoom('public')">🚪 Return to Global Hub</button>` : ''}
         </div>
         <div class="grid-2">
             <div class="card" style="padding: 1.5rem;"><h3 style="margin-bottom: 0.5rem; font-weight: 800;">Create Private Hub</h3><p style="color:var(--text-2); font-size:0.85rem; margin-bottom: 1rem;">Generate a fresh database for your own leagues.</p><button class="btn btn-primary btn-full" onclick="RoomManager.createRoom()">+ Generate Private Room</button></div>
@@ -212,50 +204,49 @@ const Home = {
   render() {
     const s = App.state; const isPublic = s.currentRoom === 'public'; const liveMatches = s.matches.filter(m => m.status === 'live');
     const doneMatches = s.matches.filter(m => m.status === 'completed').slice(-5).reverse();
+    const canEdit = hasEditAccess();
 
-    if (isPublic) {
-      // PUBLIC VIEW: Just the Scores & basic info
-      el('section-home').innerHTML = `
-        <div class="hero"><div class="hero-content">
-            <div class="hero-badge">🌍 GLOBAL PUBLIC HUB</div>
-            <h1 class="hero-title">Cricket<span class="accent">Hub</span> Live</h1>
-            <p class="hero-desc">Follow live ball-by-ball updates and recent match results.</p>
-        </div></div>
-        <div class="container">
-            ${liveMatches.length ? `<div class="section-header mt-3"><h2 class="section-title">🔴 Live Now</h2></div>${liveMatches.map(m => Tournament.matchRow(m)).join('')}` : `<div class="empty-state" style="margin-top:2rem;"><div class="empty-icon">🏏</div><div class="empty-title">No Live Matches</div><div class="empty-desc">Check back later for live cricket action.</div></div>`}
-            ${doneMatches.length ? `<div class="section-header mt-4"><h2 class="section-title">📋 Recent Results</h2></div>${doneMatches.map(m => Tournament.matchRow(m)).join('')}` : ''}
-            <div style="text-align:center; margin-top: 3rem;"><button class="btn btn-outline btn-sm" onclick="navigate('room')">Enter Private Hub 🔒</button></div>
-        </div>`;
-    } else {
-      // PRIVATE ROOM VIEW: Full Dashboard
-      el('section-home').innerHTML = `
-        <div class="hero"><div class="hero-content">
-            <div class="hero-badge">🔒 PRIVATE HUB: ${s.currentRoom}</div>
-            <h1 class="hero-title">Manage Your<br><span class="accent">Private League</span></h1>
-            <div class="hero-actions">
-                <button class="btn btn-primary btn-lg" onclick="navigate('players')">👤 Register Player</button>
-                <button class="btn btn-outline btn-lg" onclick="navigate('quickmatch')">⚡ Match Center</button>
-            </div>
-        </div></div>
-        <div class="container">
-          <div class="section-header mt-3"><h2 class="section-title">Navigation Hub</h2></div>
-          <div class="home-grid">
-            <div class="quick-action-card" onclick="navigate('room')"><div class="qa-icon">🏠</div><div class="qa-title">Hub Manager</div><div class="qa-desc">Switch between Public and Private rooms.</div></div>
-            <div class="quick-action-card" onclick="navigate('profile')"><div class="qa-icon">👤</div><div class="qa-title">My Profile</div><div class="qa-desc">View your personal linked career stats.</div></div>
-            <div class="quick-action-card" onclick="navigate('scores')"><div class="qa-icon">📊</div><div class="qa-title">Live Scores</div><div class="qa-desc">Watch real-time ball-by-ball updates.</div></div>
-            <div class="quick-action-card" onclick="navigate('tournament')"><div class="qa-icon">🏆</div><div class="qa-title">Tournaments</div><div class="qa-desc">Organize and view schedules & standings.</div></div>
-            <div class="quick-action-card" onclick="navigate('auction')"><div class="qa-icon">🔨</div><div class="qa-title">Auctions</div><div class="qa-desc">Join or view live IPL-style bidding rooms.</div></div>
-            <div class="quick-action-card" onclick="navigate('stats')"><div class="qa-icon">📈</div><div class="qa-title">Stats Hub</div><div class="qa-desc">Leaderboards and awards.</div></div>
-          </div>
-          ${liveMatches.length ? `<div class="section-header mt-3"><h2 class="section-title">🔴 Live Now</h2></div>${liveMatches.map(m => Tournament.matchRow(m)).join('')}` : ''}
-        </div>`;
-    }
+    // Display all Quick Actions so they are easily accessible from Home
+    el('section-home').innerHTML = `
+    <div class="hero"><div class="hero-content">
+        <div class="hero-badge">🏏 ${isPublic ? 'GLOBAL PUBLIC HUB' : `PRIVATE HUB: ${s.currentRoom}`}</div>
+        <h1 class="hero-title">Where Cricket<br><span class="accent">Legends</span> Are Made</h1>
+        <p class="hero-desc">Follow live ball-by-ball scores, tournaments, and real-time auctions.</p>
+        ${canEdit ? `
+        <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" onclick="navigate('players')">👤 Register Player</button>
+            <button class="btn btn-outline btn-lg" onclick="navigate('quickmatch')">⚡ Quick Match</button>
+            <button class="btn btn-ghost btn-lg" onclick="navigate('auction')">🔨 Start Auction</button>
+        </div>` : '<p style="color:var(--text-2); margin-bottom: 2rem;">Viewing in Viewer Mode. Log in as admin to make changes.</p>'}
+    </div></div>
+    <div class="container">
+      <div class="section-header mt-3"><h2 class="section-title">Navigation Hub</h2></div>
+      <div class="home-grid">
+        <div class="quick-action-card" onclick="navigate('room')"><div class="qa-icon">🏠</div><div class="qa-title">Hub Manager</div><div class="qa-desc">Switch between Public and Private rooms.</div></div>
+        <div class="quick-action-card" onclick="navigate('profile')"><div class="qa-icon">👤</div><div class="qa-title">My Profile</div><div class="qa-desc">View your personal linked career stats.</div></div>
+        <div class="quick-action-card" onclick="navigate('scores')"><div class="qa-icon">📊</div><div class="qa-title">Live Scores</div><div class="qa-desc">Watch real-time ball-by-ball updates.</div></div>
+        <div class="quick-action-card" onclick="navigate('tournament')"><div class="qa-icon">🏆</div><div class="qa-title">Tournaments</div><div class="qa-desc">Organize and view schedules & standings.</div></div>
+        <div class="quick-action-card" onclick="navigate('auction')"><div class="qa-icon">🔨</div><div class="qa-title">Auctions</div><div class="qa-desc">Join or view live IPL-style bidding rooms.</div></div>
+        <div class="quick-action-card" onclick="navigate('stats')"><div class="qa-icon">📈</div><div class="qa-title">Stats Hub</div><div class="qa-desc">Leaderboards and awards.</div></div>
+      </div>
+
+      ${liveMatches.length ? `<div class="section-header mt-3"><h2 class="section-title">🔴 Live Now</h2></div>${liveMatches.map(m => Tournament.matchRow(m)).join('')}` : ''}
+      ${doneMatches.length ? `<div class="section-header mt-4"><h2 class="section-title">📋 Recent Results</h2></div>${doneMatches.map(m => Tournament.matchRow(m)).join('')}` : ''}
+      
+      <div style="text-align:center; margin-top: 3rem;">
+         <div style="font-size:0.8rem; color:var(--text-3); margin-bottom: 0.5rem;">Logged in as: ${App.state.currentUser}</div>
+         <button class="btn btn-outline btn-sm" onclick="AuthUI.logout()">Logout</button>
+      </div>
+    </div>`;
     updateLivePill();
   }
 };
 
 function updateLivePill() { const liveCount = App.state.matches.filter(m => m.status === 'live').length; const pill = el('live-pill'); if (pill) pill.style.display = liveCount > 0 ? 'flex' : 'none'; if (el('live-count')) el('live-count').textContent = liveCount; }
 
+/* ============================================================
+   PLAYERS
+   ============================================================ */
 const Players = {
   filter: { role: 'all', search: '', sort: 'name' },
   render() { el('section-players').innerHTML = `<div class="container"><div class="section-header"><div><h1 class="section-title">👤 Players Registry</h1><div class="section-subtitle">${App.state.players.length} players registered</div></div>${hasEditAccess() ? `<button class="btn btn-primary" onclick="Players.openRegister()">+ Register Player</button>` : ''}</div><div class="search-bar"><div class="search-input-wrap"><span class="search-icon">🔍</span><input class="search-input" id="player-search" placeholder="Search by name…" oninput="Players.applyFilter()" value="${escHtml(this.filter.search)}"></div></div><div class="grid-3" id="players-grid"></div></div>`; this.renderGrid(); },
@@ -271,6 +262,9 @@ const Players = {
   viewPlayer(id) { const p = App.state.players.find(x => x.id === id); if (!p) return; Modal.open(`<div style="text-align:center"><div style="display:flex; justify-content:center; margin-bottom:1rem;">${renderAvatar(p.photo, '5rem')}</div><h2>${escHtml(p.name)}</h2><div style="color:var(--gold)">${escHtml(p.role)}</div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.5rem;text-align:center">${[['Matches', p.stats.matches], ['Runs', p.stats.runs], ['Wkts', p.stats.wickets], ['High Score', p.stats.highScore]].map(([l, v]) => `<div style="background:var(--surface-2);padding:1rem;border-radius:8px"><div style="font-size:1.5rem;font-weight:800;color:var(--gold)">${v || 0}</div><div style="font-size:0.75rem">${l}</div></div>`).join('')}</div>`); }
 };
 
+/* ============================================================
+   AUCTION
+   ============================================================ */
 const Auction = {
   render() { el('section-auction').innerHTML = `<div class="container"><div class="section-header"><div><h1 class="section-title">🔨 Auctions</h1></div>${hasEditAccess() ? `<button class="btn btn-primary" onclick="Auction.openCreate()">+ Create Room</button>` : ''}</div><div class="grid-2" id="auction-grid"></div></div>`; this.renderRooms(); },
   renderRooms() { const grid = el('auction-grid'); if (!grid) return; grid.innerHTML = App.state.auctionRooms.length ? App.state.auctionRooms.map(r => `<div class="room-card" onclick="Auction.openRoom('${r.id}')"><h3>${escHtml(r.name)}</h3><div class="room-code">${r.code}</div></div>`).join('') : `<div class="empty-state" style="grid-column:1/-1"><div class="empty-title">No Rooms</div></div>`; },
@@ -279,6 +273,9 @@ const Auction = {
   openRoom(id) { const room = App.state.auctionRooms.find(r => r.id === id); if (!room) return; Modal.open(`<h2>${escHtml(room.name)}</h2><div class="room-code">${room.code}</div><p style="margin-top:1rem;color:var(--text-3)">Bidding Engine Active.</p>`); }
 };
 
+/* ============================================================
+   TOURNAMENT (WITH NRR AND AUCTION IMPORT)
+   ============================================================ */
 const Tournament = {
   render() { el('section-tournament').innerHTML = `<div class="container"><div class="section-header"><div><h1 class="section-title">🏆 Tournaments</h1></div>${hasEditAccess() ? `<button class="btn btn-primary" onclick="Tournament.openCreate()">+ New Tournament</button>` : ''}</div><div class="grid-2" id="tourn-grid"></div></div>`; this.renderGrid(); },
   renderGrid() { const grid = el('tourn-grid'); if (!grid) return; grid.innerHTML = App.state.tournaments.length ? App.state.tournaments.map(t => `<div class="tournament-card" onclick="Tournament.openDetail('${t.id}')"><h3>${escHtml(t.name)}</h3><span class="format-badge format-${t.format}">${t.format}</span></div>`).join('') : `<div class="empty-state" style="grid-column:1/-1"><div class="empty-title">No Tournaments</div></div>`; },
@@ -323,7 +320,6 @@ const Tournament = {
     };
     App.state.tournaments.push(tourn);
 
-    // Auto-generate round-robin schedule
     for (let i = 0; i < teams.length; i++) {
       for (let j = i + 1; j < teams.length; j++) {
         App.state.matches.push({ id: uid(), tournamentId: tourn.id, team1: teams[i], team2: teams[j], format: tourn.format, overs: tourn.overs, status: 'upcoming', date: now() });
@@ -374,8 +370,7 @@ const Tournament = {
 
     r1.played++; r2.played++;
     const inn1 = m.innings?.[0]; const inn2 = m.innings?.[1];
-
-    const calcOvers = (balls) => Math.floor(balls / 6) + ((balls % 6) / 6); // Exact mathematical decimal for NRR
+    const calcOvers = (balls) => Math.floor(balls / 6) + ((balls % 6) / 6);
 
     if (inn1) {
       r1.runsFor += inn1.total || 0; r1.oversFor += calcOvers(inn1.balls || 0) || 1;
@@ -399,11 +394,14 @@ const Tournament = {
   startMatch(id) { if (!hasEditAccess()) return; const m = App.state.matches.find(x => x.id === id); if (!m) return; m.status = 'live'; m.innings = [{ battingTeam: m.team1, bowlingTeam: m.team2, batting: Array.from({ length: 11 }, (_, i) => ({ name: `${m.team1} P${i + 1}`, runs: 0, balls: 0, fours: 0, sixes: 0, out: false, notout: true })), bowling: Array.from({ length: 11 }, (_, i) => ({ name: `${m.team2} P${i + 1}`, overs: 0, overBalls: 0, runs: 0, wickets: 0, maidens: 0 })), total: 0, wickets: 0, balls: 0, overs: 0, extras: { wide: 0, noBall: 0, bye: 0, legBye: 0 }, fallOfWickets: [], currentOver: [], striker: 0, nonStriker: 1, bowlerIdx: 0 }]; m.currentInnings = 0; m.commentary = []; App.save(); Modal.close(); QuickMatch.openScoring(id); }
 };
 
+/* ============================================================
+   STATS & SCORES
+   ============================================================ */
 const Stats = { render() { el('section-stats').innerHTML = `<div class="container"><div class="section-header"><h1 class="section-title">📈 Stats Hub</h1></div><div class="empty-state">Stats populate globally after matches.</div></div>`; } };
 const Scores = { render() { el('section-scores').innerHTML = `<div class="container"><div class="section-header"><h1 class="section-title">📊 Live Scorecards</h1></div><div class="grid-2">${App.state.matches.map(m => Tournament.matchRow(m)).join('')}</div></div>`; }, viewScorecard(id) { const m = App.state.matches.find(x => x.id === id); if (!m) return; Modal.open(`<h2>${m.team1} vs ${m.team2}</h2><div style="font-size:2rem; font-weight:800; color:var(--gold); margin:1rem 0;">${m.innings?.[0]?.total || 0}/${m.innings?.[0]?.wickets || 0}</div><div style="color:var(--text-2)">${m.result || 'Live'}</div>${hasEditAccess() && m.status === 'live' ? `<button class="btn btn-primary mt-2" onclick="Modal.close();QuickMatch.openScoring('${id}')">Score Match</button>` : ''}`); } };
 
 /* ============================================================
-   11. QUICK MATCH & THE NEW SCORING ENGINE
+   QUICK MATCH & SCORING ENGINE (WITH UNDO AND BROADCAST UI)
    ============================================================ */
 const QuickMatch = {
   render() {
@@ -442,18 +440,15 @@ const QuickMatch = {
   undoLast(matchId) {
     if (!hasEditAccess()) return;
     const match = App.state.matches.find(m => m.id === matchId);
-    if (!match || !match.history || match.history.length === 0) {
-      Toast.show('No previous actions to undo!', 'error');
-      return;
-    }
+    if (!match || !match.history || match.history.length === 0) return Toast.show('No previous actions to undo!', 'error');
+
     const lastState = match.history.pop();
     match.innings = lastState.innings;
     match.commentary = lastState.commentary;
     match.currentInnings = lastState.currentInnings;
     match.status = lastState.status;
 
-    App.save();
-    App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } });
+    App.save(); App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } });
     this.renderScoringPanel(matchId);
     Toast.show('Undo successful. Restored previous ball state.', 'info');
   },
@@ -464,28 +459,17 @@ const QuickMatch = {
     let html = `<h2 class="modal-title">🏏 Add ${labels[type]}</h2>`;
 
     if (type === 'noball') {
-      html += `<p style="margin-bottom:1rem;color:var(--text-2)">How many runs off the bat?</p>
-          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.5rem;">
-              ${[0, 1, 2, 3, 4, 6].map(r => `<button class="btn btn-outline" style="height:3.5rem;font-size:1.2rem;font-weight:800;" onclick="QuickMatch.processExtra('${matchId}','${type}',${r})">${r}</button>`).join('')}
-          </div>`;
+      html += `<p style="margin-bottom:1rem;color:var(--text-2)">How many runs off the bat?</p><div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.5rem;">${[0, 1, 2, 3, 4, 6].map(r => `<button class="btn btn-outline" style="height:3.5rem;font-size:1.2rem;font-weight:800;" onclick="QuickMatch.processExtra('${matchId}','${type}',${r})">${r}</button>`).join('')}</div>`;
     } else if (type === 'wide') {
-      html += `<p style="margin-bottom:1rem;color:var(--text-2)">Total wide runs (including any byes to boundary)?</p>
-          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.5rem;">
-              ${[1, 2, 3, 4, 5].map(r => `<button class="btn btn-outline" style="height:3.5rem;font-size:1.2rem;font-weight:800;" onclick="QuickMatch.processExtra('${matchId}','${type}',${r})">${r}</button>`).join('')}
-          </div>`;
+      html += `<p style="margin-bottom:1rem;color:var(--text-2)">Total wide runs (including any byes to boundary)?</p><div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.5rem;">${[1, 2, 3, 4, 5].map(r => `<button class="btn btn-outline" style="height:3.5rem;font-size:1.2rem;font-weight:800;" onclick="QuickMatch.processExtra('${matchId}','${type}',${r})">${r}</button>`).join('')}</div>`;
     } else {
-      html += `<p style="margin-bottom:1rem;color:var(--text-2)">How many ${labels[type]} run?</p>
-          <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.5rem;">
-              ${[1, 2, 3, 4].map(r => `<button class="btn btn-outline" style="height:3.5rem;font-size:1.2rem;font-weight:800;" onclick="QuickMatch.processExtra('${matchId}','${type}',${r})">${r}</button>`).join('')}
-          </div>`;
+      html += `<p style="margin-bottom:1rem;color:var(--text-2)">How many ${labels[type]} run?</p><div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.5rem;">${[1, 2, 3, 4].map(r => `<button class="btn btn-outline" style="height:3.5rem;font-size:1.2rem;font-weight:800;" onclick="QuickMatch.processExtra('${matchId}','${type}',${r})">${r}</button>`).join('')}</div>`;
     }
     Modal.open(html);
   },
 
   processExtra(matchId, type, extraValue) {
-    Modal.close();
-    this.saveSnapshot(matchId);
-
+    Modal.close(); this.saveSnapshot(matchId);
     const match = App.state.matches.find(m => m.id === matchId);
     const inn = match.innings[match.currentInnings];
     const striker = inn.batting[inn.striker];
@@ -493,24 +477,10 @@ const QuickMatch = {
 
     let runsToAddTotal = 0; let runsToBatsman = 0; let runsToBowler = 0; let ballValid = true;
 
-    if (type === 'noball') {
-      runsToAddTotal = extraValue + 1;
-      runsToBatsman = extraValue;
-      runsToBowler = extraValue + 1;
-      inn.extras.noBall += 1;
-      ballValid = false;
-    } else if (type === 'wide') {
-      runsToAddTotal = extraValue;
-      runsToBowler = extraValue;
-      inn.extras.wide += extraValue;
-      ballValid = false;
-    } else if (type === 'bye') {
-      runsToAddTotal = extraValue;
-      inn.extras.bye += extraValue;
-    } else if (type === 'legbye') {
-      runsToAddTotal = extraValue;
-      inn.extras.legBye += extraValue;
-    }
+    if (type === 'noball') { runsToAddTotal = extraValue + 1; runsToBatsman = extraValue; runsToBowler = extraValue + 1; inn.extras.noBall += 1; ballValid = false; }
+    else if (type === 'wide') { runsToAddTotal = extraValue; runsToBowler = extraValue; inn.extras.wide += extraValue; ballValid = false; }
+    else if (type === 'bye') { runsToAddTotal = extraValue; inn.extras.bye += extraValue; }
+    else if (type === 'legbye') { runsToAddTotal = extraValue; inn.extras.legBye += extraValue; }
 
     inn.total += runsToAddTotal;
 
@@ -521,10 +491,7 @@ const QuickMatch = {
       if (ballValid || type === 'noball') striker.balls++;
     }
 
-    if (bowler) {
-      bowler.runs += runsToBowler;
-      if (ballValid) bowler.overBalls++;
-    }
+    if (bowler) { bowler.runs += runsToBowler; if (ballValid) bowler.overBalls++; }
 
     inn.currentOver.push({ runs: runsToAddTotal, type: type, wicket: false });
     if (ballValid) inn.balls++;
@@ -535,10 +502,7 @@ const QuickMatch = {
     match.commentary = match.commentary || [];
     match.commentary.push({ over: `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`, text: `${type.toUpperCase()}! ${runsToAddTotal} runs added to total.` });
 
-    this.checkOverEnd(inn, bowler);
-    App.save();
-    App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } });
-    this.renderScoringPanel(matchId);
+    this.checkOverEnd(inn, bowler); App.save(); App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } }); this.renderScoringPanel(matchId);
   },
 
   addBall(matchId, runs) {
@@ -551,16 +515,8 @@ const QuickMatch = {
     const bowler = inn.bowling[inn.bowlerIdx];
 
     inn.total += runs;
-    if (striker) {
-      striker.runs += runs;
-      striker.balls++;
-      if (runs === 4) striker.fours++;
-      if (runs === 6) striker.sixes++;
-    }
-    if (bowler) {
-      bowler.runs += runs;
-      bowler.overBalls++;
-    }
+    if (striker) { striker.runs += runs; striker.balls++; if (runs === 4) striker.fours++; if (runs === 6) striker.sixes++; }
+    if (bowler) { bowler.runs += runs; bowler.overBalls++; }
 
     inn.balls++;
     inn.currentOver.push({ runs, type: 'run', wicket: false });
@@ -569,27 +525,19 @@ const QuickMatch = {
     match.commentary = match.commentary || [];
     match.commentary.push({ over: `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`, text: `Clean strike. ${runs} run${runs !== 1 ? 's' : ''} taken.` });
 
-    this.checkOverEnd(inn, bowler);
-    App.save();
-    App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } });
-    this.renderScoringPanel(matchId);
+    this.checkOverEnd(inn, bowler); App.save(); App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } }); this.renderScoringPanel(matchId);
   },
 
   addWicket(matchId) {
     if (!hasEditAccess()) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
-    const inn = match.innings[match.currentInnings];
-    if (inn.wickets >= 10) return Toast.show('All out!', 'error');
+    if (match.innings[match.currentInnings].wickets >= 10) return Toast.show('All out!', 'error');
 
     Modal.open(`
       <h2 class="modal-title">🎳 Wicket!</h2>
-      <div class="form-group"><label class="form-label">Dismissal Type</label>
-        <select class="form-select" id="w-type"><option>Caught</option><option>Bowled</option><option>LBW</option><option>Run Out</option></select>
-      </div>
-      <div class="form-group"><label class="form-label">Runs completed before wicket?</label>
-        <input class="form-input" type="number" id="w-runs" value="0" min="0" max="6">
-      </div>
+      <div class="form-group"><label class="form-label">Dismissal Type</label><select class="form-select" id="w-type"><option>Caught</option><option>Bowled</option><option>LBW</option><option>Run Out</option></select></div>
+      <div class="form-group"><label class="form-label">Runs completed before wicket?</label><input class="form-input" type="number" id="w-runs" value="0" min="0" max="6"></div>
       <button class="btn btn-red btn-full" onclick="QuickMatch.confirmWicket('${matchId}')">Confirm Wicket</button>
     `);
   },
@@ -600,84 +548,51 @@ const QuickMatch = {
 
     const match = App.state.matches.find(m => m.id === matchId);
     const inn = match.innings[match.currentInnings];
-    const type = el('w-type')?.value;
-    const runs = +(el('w-runs')?.value || 0);
+    const type = el('w-type')?.value; const runs = +(el('w-runs')?.value || 0);
+    const striker = inn.batting[inn.striker]; const bowler = inn.bowling[inn.bowlerIdx];
 
-    const striker = inn.batting[inn.striker];
-    const bowler = inn.bowling[inn.bowlerIdx];
-
-    if (striker) {
-      striker.out = true;
-      striker.how = type;
-      striker.runs += runs;
-      striker.balls++;
-    }
-
+    if (striker) { striker.out = true; striker.how = type; striker.runs += runs; striker.balls++; }
     if (bowler && type !== 'Run Out') bowler.wickets++;
     if (bowler) { bowler.runs += runs; bowler.overBalls++; }
 
-    inn.wickets++;
-    inn.balls++;
-    inn.total += runs;
+    inn.wickets++; inn.balls++; inn.total += runs;
     inn.currentOver.push({ runs, type: 'run', wicket: true });
 
     const newBatIdx = inn.wickets + 1;
     if (inn.batting[newBatIdx]) inn.striker = newBatIdx;
 
-    match.commentary = match.commentary || [];
-    match.commentary.push({ over: `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`, text: `OUT! ${striker.name} departs via ${type}.` });
+    match.commentary = match.commentary || []; match.commentary.push({ over: `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`, text: `OUT! ${striker.name} departs via ${type}.` });
 
-    this.checkOverEnd(inn, bowler);
-    App.save();
-    App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } });
-    Modal.close();
-    this.renderScoringPanel(matchId);
+    this.checkOverEnd(inn, bowler); App.save(); App.broadcast({ type: 'SCORE_UPDATE', payload: { matchId } }); Modal.close(); this.renderScoringPanel(matchId);
   },
 
   swapStrike(inn) { const s = inn.striker; inn.striker = inn.nonStriker; inn.nonStriker = s; },
-
-  checkOverEnd(inn, bowler) {
-    if (inn.balls % 6 === 0 && inn.balls > 0) {
-      inn.overs = Math.floor(inn.balls / 6);
-      if (bowler) { bowler.overs++; bowler.overBalls = 0; }
-      inn.currentOver = [];
-      this.swapStrike(inn);
-    }
-  },
+  checkOverEnd(inn, bowler) { if (inn.balls % 6 === 0 && inn.balls > 0) { inn.overs = Math.floor(inn.balls / 6); if (bowler) { bowler.overs++; bowler.overBalls = 0; } inn.currentOver = []; this.swapStrike(inn); } },
 
   renderScoringPanel(matchId) {
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
-    const ci = match.currentInnings || 0;
-    const inn = match.innings?.[ci];
+    const ci = match.currentInnings || 0; const inn = match.innings?.[ci];
     if (!inn) return;
 
-    const striker = inn.batting?.[inn.striker || 0];
-    const nonStriker = inn.batting?.[inn.nonStriker || 1];
-    const bowler = inn.bowling?.[inn.bowlerIdx || 0];
-    const overs = Math.floor((inn.balls || 0) / 6);
-    const ballsInOver = (inn.balls || 0) % 6;
+    const striker = inn.batting?.[inn.striker || 0]; const nonStriker = inn.batting?.[inn.nonStriker || 1]; const bowler = inn.bowling?.[inn.bowlerIdx || 0];
+    const overs = Math.floor((inn.balls || 0) / 6); const ballsInOver = (inn.balls || 0) % 6;
     const runsInOver = (inn.currentOver || []).reduce((a, b) => a + (b.runs || 0), 0);
-
     const target = ci === 1 ? (match.innings?.[0]?.total || 0) + 1 : null;
 
     const panel = el('scoring-panel');
     panel.innerHTML = `
-    <!-- Premium Broadcast Header -->
+    <!-- Broadcast Scorecard (Safely styled inline) -->
     <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05);">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div>
                 <span class="live-badge" style="margin-bottom: 0.5rem;"><span class="pulse-dot"></span>LIVE</span>
                 <div style="font-size:1.1rem; color:var(--text-2); font-weight:600;">${escHtml(match.team1)} vs ${escHtml(match.team2)}</div>
                 <div style="font-size:4rem; font-weight:900; color:white; font-family:'Roboto Mono', monospace; line-height: 1;">${inn.total || 0}<span style="font-size:2rem; color:var(--text-3)">/${inn.wickets || 0}</span></div>
-                <div style="font-size:1rem; color:var(--gold); margin-top:0.5rem; font-weight: 700;">
-                    Overs: ${overs}.${ballsInOver} <span style="color:var(--text-3); margin: 0 8px;">|</span> CRR: ${inn.balls ? ((inn.total || 0) / (inn.balls / 6)).toFixed(2) : '0.00'}
-                    ${target ? `<span style="color:var(--text-3); margin: 0 8px;">|</span> Target: <span style="color:var(--red-2)">${target}</span>` : ''}
-                </div>
+                <div style="font-size:1rem; color:var(--gold); margin-top:0.5rem; font-weight: 700;">Overs: ${overs}.${ballsInOver} <span style="color:var(--text-3); margin: 0 8px;">|</span> CRR: ${inn.balls ? ((inn.total || 0) / (inn.balls / 6)).toFixed(2) : '0.00'} ${target ? `<span style="color:var(--text-3); margin: 0 8px;">|</span> Target: <span style="color:var(--red-2)">${target}</span>` : ''}</div>
             </div>
             <button class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,0.1); color:white;" onclick="QuickMatch.closeScoring()">✕ Close</button>
         </div>
-        
         <div style="margin-top: 1.5rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px;">
             <div style="font-size:0.75rem; color:var(--text-3); text-transform:uppercase; font-weight:800; margin-bottom:0.5rem; letter-spacing:1px;">This Over (${runsInOver} Runs)</div>
             <div style="display:flex; gap: 8px; overflow-x:auto; padding-bottom: 4px;">
@@ -690,7 +605,7 @@ const QuickMatch = {
         </div>
     </div>
 
-    <!-- Batsman/Bowler Grid -->
+    <!-- Batsman/Bowler Stats -->
     <div style="display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1.5rem;">
         <div style="background: var(--surface-2); border-radius: 12px; padding: 1.25rem; border-left: 4px solid var(--gold);">
             <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
@@ -702,7 +617,6 @@ const QuickMatch = {
                 <div style="font-family:'Roboto Mono', monospace; font-size: 0.95rem; color: var(--text-2);">${nonStriker?.runs || 0} (${nonStriker?.balls || 0})</div>
             </div>
         </div>
-        
         <div style="background: var(--surface-2); border-radius: 12px; padding: 1.25rem; border-left: 4px solid var(--green);">
             <div style="display:flex; justify-content: space-between; align-items:center;">
                 <div style="font-weight: 800; font-size: 1.1rem; color: var(--green);">🎳 ${escHtml(bowler?.name || 'Bowler')}</div>
@@ -711,13 +625,12 @@ const QuickMatch = {
         </div>
     </div>
 
-    <!-- Controls (Only visible to Editors) -->
+    <!-- Controls Panel -->
     ${hasEditAccess() ? `
     <div style="font-size:0.8rem; font-weight:800; color:var(--text-3); text-transform:uppercase; margin-bottom:0.5rem; letter-spacing:1px;">Runs off Bat</div>
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
       ${[0, 1, 2, 3, 4, 6].map(v => `<button class="btn btn-outline" style="font-size:1.2rem; font-weight:900; height: 3.5rem; ${v === 4 || v === 6 ? 'border-color:var(--gold); color:var(--gold)' : ''}" onclick="QuickMatch.addBall('${matchId}',${v})">${v}</button>`).join('')}
     </div>
-    
     <div style="font-size:0.8rem; font-weight:800; color:var(--text-3); text-transform:uppercase; margin-bottom:0.5rem; letter-spacing:1px;">Action Panel</div>
     <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-bottom: 1.5rem;">
       <button class="btn btn-red" style="font-weight:800;" onclick="QuickMatch.addWicket('${matchId}')">W</button>
@@ -726,7 +639,6 @@ const QuickMatch = {
       <button class="btn btn-outline" style="background:var(--surface-3);border:none;" onclick="QuickMatch.promptExtra('${matchId}','bye')">B</button>
       <button class="btn btn-outline" style="background:var(--surface-3);border:none;" onclick="QuickMatch.promptExtra('${matchId}','legbye')">Lb</button>
     </div>
-    
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
       <button class="btn btn-outline btn-sm" onclick="QuickMatch.changeBatsmen('${matchId}')">🔄 Swap Striker</button>
       <button class="btn btn-outline btn-sm" onclick="QuickMatch.changeBowler('${matchId}')">🔄 Change Bowler</button>
@@ -736,8 +648,7 @@ const QuickMatch = {
     
     <div class="commentary-feed" style="margin-top: 1.5rem; max-height: 200px; overflow-y:auto;">
       ${(match.commentary || []).slice(-10).reverse().map(c => `<div class="commentary-item" style="border-left: 2px solid var(--gold); padding-left: 0.75rem; margin-bottom: 0.5rem;"><span style="font-weight:800; color:var(--text-2); margin-right: 0.5rem;">${c.over}</span> ${escHtml(c.text)}</div>`).join('')}
-    </div>
-    `;
+    </div>`;
   },
 
   declareResult(matchId) {
@@ -748,13 +659,9 @@ const QuickMatch = {
     const inn2 = match.innings?.[1];
 
     if (!inn2) {
-      // End 1st Innings
       Modal.open(`
         <h2 class="modal-title">⏭ End 1st Innings</h2>
-        <div style="text-align:center;margin:1.5rem 0">
-          <div style="font-size:2.5rem;font-weight:900;color:var(--gold)">${inn1.total}/${inn1.wickets}</div>
-          <p>Target: ${(inn1.total || 0) + 1}</p>
-        </div>
+        <div style="text-align:center;margin:1.5rem 0"><div style="font-size:2.5rem;font-weight:900;color:var(--gold)">${inn1.total}/${inn1.wickets}</div><p>Target: ${(inn1.total || 0) + 1}</p></div>
         <button class="btn btn-primary btn-full" onclick="QuickMatch.startSecondInnings('${matchId}')">Start 2nd Innings</button>
       `);
       return;
@@ -767,9 +674,7 @@ const QuickMatch = {
 
     Modal.open(`
       <h2 class="modal-title">🏆 Match Result</h2>
-      <div style="text-align:center;margin:1.5rem 0">
-        <div style="font-size:1.4rem;font-weight:800;color:var(--gold)">${escHtml(result)}</div>
-      </div>
+      <div style="text-align:center;margin:1.5rem 0"><div style="font-size:1.4rem;font-weight:800;color:var(--gold)">${escHtml(result)}</div></div>
       <button class="btn btn-primary btn-full" onclick="QuickMatch.finalizeResult('${matchId}', '${escHtml(result)}', '${escHtml(winner)}')">Save Result</button>
     `);
   },
@@ -799,82 +704,43 @@ const QuickMatch = {
 };
 
 /* ============================================================
-   14. EVENT LISTENERS & INJECTIONS (FIXED LAYOUT)
+   14. EVENT LISTENERS - REPAIRED LAYOUT
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .nav-container { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; justify-content: space-between !important; align-items: center !important; width: 100%; }
-    .nav-brand { margin: 0 !important; padding: 0 !important; cursor: pointer; }
-    .brand-wrapper { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
-    .hamburger { flex-shrink: 0; margin-left: auto; font-size: 1.5rem; cursor: pointer; }
-    
-    @media(min-width: 768px){
-      .nav-links { display: flex !important; gap: 1rem; overflow-x: auto; padding-bottom: 5px; margin-left: auto; margin-right: 1rem; flex: 1; justify-content: flex-end; }
-      .nav-links::-webkit-scrollbar { height: 4px; }
-      .nav-links::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 4px; }
-      .hamburger { display: none !important; }
-    }
-    @media(max-width: 767px){
-      .nav-links { display: none !important; }
-      .hamburger { display: block !important; }
-    }
-    section { display: none; }
-    section.active { display: block; animation: fadeIn 0.3s ease-out; }
-  `;
-  document.head.appendChild(style);
 
-  // Wrap the brand and inject the dynamic Exit Room button safely using backticks!
-  const navBrand = document.querySelector('.nav-brand');
-  if (navBrand && !document.getElementById('exit-private-btn')) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'brand-wrapper';
-    navBrand.parentNode.insertBefore(wrapper, navBrand);
-    wrapper.appendChild(navBrand);
-
-    wrapper.insertAdjacentHTML('beforeend', `<button id="exit-private-btn" style="display:none; background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:800; cursor:pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3);" onclick="RoomManager.switchRoom('public')">🚪 Exit Hub</button>`);
-  }
-
+  // Safely inject sections without breaking existing styles
   const main = document.querySelector('main');
   if (main && !document.getElementById('section-room')) {
     main.insertAdjacentHTML('beforeend', '<section id="section-room" class="section"></section>');
     main.insertAdjacentHTML('beforeend', '<section id="section-profile" class="section"></section>');
   }
 
+  // Safely inject normal nav links. NO layout-breaking CSS.
   const navLinks = document.querySelector('.nav-links');
   if (navLinks && !document.getElementById('nav-room')) {
     navLinks.insertAdjacentHTML('beforeend', `<a href="#" class="nav-link" data-route="room" id="nav-room">🏠 Hub Manager</a>`);
     navLinks.insertAdjacentHTML('beforeend', `<a href="#" class="nav-link" data-route="profile" id="nav-profile">👤 Profile</a>`);
+    navLinks.insertAdjacentHTML('beforeend', `<button id="exit-private-btn" class="btn btn-red btn-sm" style="display:none; margin-left:1rem; cursor:pointer;" onclick="RoomManager.switchRoom('public')">🚪 Exit Hub</button>`);
   }
 
   const mobLinks = document.querySelector('.mobile-nav');
   if (mobLinks && !document.getElementById('mob-room')) {
     mobLinks.insertAdjacentHTML('beforeend', `<a href="#" class="mobile-nav-link" data-route="room" id="mob-room">🏠 Hub Manager</a>`);
     mobLinks.insertAdjacentHTML('beforeend', `<a href="#" class="mobile-nav-link" data-route="profile" id="mob-profile">👤 Profile</a>`);
+    mobLinks.insertAdjacentHTML('beforeend', `<button id="exit-private-btn-mob" class="btn btn-red btn-full" style="display:none; margin-top:1rem; cursor:pointer;" onclick="RoomManager.switchRoom('public')">🚪 Exit Hub</button>`);
   }
 
-  // Failsafe Initialization
-  setTimeout(() => {
-    try {
-      if (window.FirebaseAuth) App.initAuth();
-      const l = el('loader'); if (l) l.classList.add('hidden');
-      navigate('home');
-    } catch (e) {
-      const l = el('loader'); if (l) l.classList.add('hidden');
-    }
-  }, 1200);
-
-  // Hard Failsafe just in case Firebase takes way too long
+  // Failsafe Loading
+  setTimeout(() => { try { if (window.FirebaseAuth) App.initAuth(); const l = el('loader'); if (l) l.classList.add('hidden'); navigate('home'); } catch (e) { const l = el('loader'); if (l) l.classList.add('hidden'); } }, 1200);
   setTimeout(() => { const l = el('loader'); if (l && !l.classList.contains('hidden')) { l.classList.add('hidden'); navigate('home'); } }, 3500);
 
   document.querySelectorAll('[data-route]').forEach(link => { link.addEventListener('click', (e) => { e.preventDefault(); navigate(link.dataset.route); }); });
   document.addEventListener('click', (e) => {
     if (e.target.matches('[data-route]') || e.target.closest('[data-route]')) {
-      e.preventDefault();
-      const target = e.target.closest('[data-route]');
-      if (target) navigate(target.dataset.route);
+      e.preventDefault(); const target = e.target.closest('[data-route]'); if (target) navigate(target.dataset.route);
     }
   });
+
   el('hamburger')?.addEventListener('click', () => { el('mobile-nav').classList.toggle('open'); });
   el('modal-close')?.addEventListener('click', Modal.close);
   el('modal-overlay')?.addEventListener('click', (e) => { if (e.target === el('modal-overlay')) Modal.close(); });
