@@ -4,9 +4,14 @@
    Quick Match, Live Scores, Stats Hub, Real-time BroadcastChannel
    ============================================================ */
 'use strict';
+/* ============================================================
+   CRICKET HUB — APP.JS
+   Full SPA logic with Real-time Firebase Sync!
+   ============================================================ */
+'use strict';
 
 /* ============================================================
-   1. STATE & PERSISTENCE
+   1. STATE & PERSISTENCE (LIVE FIREBASE SYNC)
    ============================================================ */
 const App = {
   state: {
@@ -19,20 +24,47 @@ const App = {
     activeScoringMatchId: null,
   },
 
-  save() {
-    localStorage.setItem('ch_players', JSON.stringify(App.state.players));
-    localStorage.setItem('ch_rooms', JSON.stringify(App.state.auctionRooms));
-    localStorage.setItem('ch_tournaments', JSON.stringify(App.state.tournaments));
-    localStorage.setItem('ch_matches', JSON.stringify(App.state.matches));
+  initLiveSync() {
+    if (!window.FirebaseDB) return;
+    const dbRef = window.FirebaseRef(window.FirebaseDB, 'crickethub_live_data');
+
+    // Automatically listen for cloud updates
+    window.FirebaseOnValue(dbRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        App.state.players = data.players || [];
+        App.state.auctionRooms = data.auctionRooms || [];
+        App.state.tournaments = data.tournaments || [];
+        App.state.matches = data.matches || [];
+
+        // Refresh the current screen so everyone sees the updates instantly
+        const route = App.state.activeRoute;
+        if (route === 'home') Home.render();
+        if (route === 'players') Players.render();
+        if (route === 'auction') Auction.render();
+        if (route === 'tournament') Tournament.render();
+        if (route === 'quickmatch') QuickMatch.render();
+        if (route === 'scores') Scores.render();
+        if (route === 'stats') Stats.render();
+
+        updateLivePill();
+        if (App.state.activeScoringMatchId && el('scoring-overlay').classList.contains('active')) {
+          QuickMatch.renderScoringPanel(App.state.activeScoringMatchId);
+        }
+      }
+    });
   },
 
-  load() {
-    try {
-      App.state.players = JSON.parse(localStorage.getItem('ch_players') || '[]');
-      App.state.auctionRooms = JSON.parse(localStorage.getItem('ch_rooms') || '[]');
-      App.state.tournaments = JSON.parse(localStorage.getItem('ch_tournaments') || '[]');
-      App.state.matches = JSON.parse(localStorage.getItem('ch_matches') || '[]');
-    } catch (e) { console.error('Load error', e); }
+  save() {
+    // Send local actions up to the Cloud
+    if (!window.FirebaseDB) return;
+    const dbRef = window.FirebaseRef(window.FirebaseDB, 'crickethub_live_data');
+    window.FirebaseSet(dbRef, {
+      players: App.state.players,
+      auctionRooms: App.state.auctionRooms,
+      tournaments: App.state.tournaments,
+      matches: App.state.matches
+    });
   },
 
   broadcast(msg) {
@@ -2218,7 +2250,11 @@ const Stats = {
    14. EVENT LISTENERS & INIT
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
-  App.load();
+
+  // Wait half a second for Firebase to connect, then start Live Sync
+  setTimeout(() => {
+    if (window.FirebaseDB) App.initLiveSync();
+  }, 500);
 
   setTimeout(() => {
     el('loader').classList.add('hidden');
@@ -2246,15 +2282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  setInterval(() => {
-    App.load();
-    if (App.state.activeRoute === 'scores') Scores.render();
-    if (App.state.activeRoute === 'home') Home.render();
-    updateLivePill();
-    if (App.state.activeScoringMatchId && el('scoring-overlay').classList.contains('active')) {
-      QuickMatch.renderScoringPanel(App.state.activeScoringMatchId);
-    }
-  }, 5000);
+  // Since Firebase pushes updates instantly, we no longer need the 5-second interval timer!
 });
 
 window.navigate = navigate;
