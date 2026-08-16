@@ -1,17 +1,11 @@
 /* ============================================================
    CRICKET HUB — APP.JS
-   Full SPA logic: State, Router, Players, Auction, Tournament,
-   Quick Match, Live Scores, Stats Hub, Real-time BroadcastChannel
-   ============================================================ */
-'use strict';
-/* ============================================================
-   CRICKET HUB — APP.JS
-   Full SPA logic with Real-time Firebase Sync!
+   Full SPA logic with Real-time Firebase Sync & Auth!
    ============================================================ */
 'use strict';
 
 /* ============================================================
-   1. STATE & PERSISTENCE (LIVE FIREBASE SYNC)
+   1. STATE & PERSISTENCE (LIVE FIREBASE SYNC + AUTH)
    ============================================================ */
 const App = {
   state: {
@@ -22,13 +16,29 @@ const App = {
     notifications: [],
     activeRoute: 'home',
     activeScoringMatchId: null,
+    currentUser: null
+  },
+
+  initAuth() {
+    if (!window.FirebaseAuth) return;
+
+    window.FirebaseOnAuth(window.FirebaseAuth, (user) => {
+      if (user) {
+        App.state.currentUser = user.email;
+        Modal.close();
+        Toast.show(`Welcome back, ${user.email.split('@')[0]}!`, 'success');
+        App.initLiveSync();
+      } else {
+        App.state.currentUser = null;
+        AuthUI.showLogin();
+      }
+    });
   },
 
   initLiveSync() {
     if (!window.FirebaseDB) return;
     const dbRef = window.FirebaseRef(window.FirebaseDB, 'crickethub_live_data');
 
-    // Automatically listen for cloud updates
     window.FirebaseOnValue(dbRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -37,15 +47,9 @@ const App = {
         App.state.tournaments = data.tournaments || [];
         App.state.matches = data.matches || [];
 
-        // Refresh the current screen so everyone sees the updates instantly
         const route = App.state.activeRoute;
-        if (route === 'home') Home.render();
-        if (route === 'players') Players.render();
-        if (route === 'auction') Auction.render();
-        if (route === 'tournament') Tournament.render();
-        if (route === 'quickmatch') QuickMatch.render();
-        if (route === 'scores') Scores.render();
-        if (route === 'stats') Stats.render();
+        const renderers = { home: Home, players: Players, auction: Auction, tournament: Tournament, quickmatch: QuickMatch, scores: Scores, stats: Stats };
+        if (renderers[route]) renderers[route].render();
 
         updateLivePill();
         if (App.state.activeScoringMatchId && el('scoring-overlay').classList.contains('active')) {
@@ -56,8 +60,7 @@ const App = {
   },
 
   save() {
-    // Send local actions up to the Cloud
-    if (!window.FirebaseDB) return;
+    if (!window.FirebaseDB || !App.state.currentUser) return;
     const dbRef = window.FirebaseRef(window.FirebaseDB, 'crickethub_live_data');
     window.FirebaseSet(dbRef, {
       players: App.state.players,
@@ -73,6 +76,53 @@ const App = {
 };
 
 /* ============================================================
+   AUTHENTICATION UI
+   ============================================================ */
+const AuthUI = {
+  showLogin() {
+    Modal.open(`
+      <div style="text-align:center; margin-bottom:1.5rem;">
+        <div style="font-size:3rem;">🔐</div>
+        <h2 class="modal-title">Admin Access Required</h2>
+        <p style="color:var(--text-2); font-size:0.9rem;">Please log in to manage Cricket Hub</p>
+      </div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="auth-email" placeholder="admin@crickethub.com"></div>
+      <div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="auth-pass" placeholder="••••••••"></div>
+      
+      <button class="btn btn-primary btn-full" style="margin-bottom:0.5rem" onclick="AuthUI.login()">Login</button>
+      <button class="btn btn-outline btn-full" onclick="AuthUI.signup()">Create Account</button>
+    `);
+
+    el('modal-overlay').onclick = null;
+    el('modal-close').style.display = 'none';
+  },
+
+  async login() {
+    const email = el('auth-email').value;
+    const pass = el('auth-pass').value;
+    try {
+      await window.FirebaseSignIn(window.FirebaseAuth, email, pass);
+    } catch (error) {
+      Toast.show(error.message.replace('Firebase: ', ''), 'error');
+    }
+  },
+
+  async signup() {
+    const email = el('auth-email').value;
+    const pass = el('auth-pass').value;
+    try {
+      await window.FirebaseSignUp(window.FirebaseAuth, email, pass);
+    } catch (error) {
+      Toast.show(error.message.replace('Firebase: ', ''), 'error');
+    }
+  },
+
+  logout() {
+    window.FirebaseSignOut(window.FirebaseAuth);
+  }
+};
+
+/* ============================================================
    2. BROADCAST CHANNEL
    ============================================================ */
 App.channel = (() => {
@@ -81,35 +131,13 @@ App.channel = (() => {
 
 App.channel.onmessage = (e) => {
   const { type, payload } = e.data || {};
-  App.load();
   switch (type) {
-    case 'SCORE_UPDATE':
-      Toast.show('📊 Live score updated!', 'info');
-      if (App.state.activeRoute === 'scores') Scores.render();
-      Home.updateTicker();
-      updateLivePill();
-      break;
-    case 'MATCH_CREATED':
-      Toast.show(`🏏 New match started: ${payload?.name || ''}`, 'info');
-      if (App.state.activeRoute === 'scores') Scores.render();
-      updateLivePill();
-      break;
-    case 'BID_UPDATE':
-      Toast.show(`💰 New bid: ₹${(payload?.amount || 0).toLocaleString('en-IN')}`, 'info');
-      if (App.state.activeRoute === 'auction') Auction.render();
-      break;
-    case 'PLAYER_REGISTERED':
-      Toast.show(`👤 New player registered: ${payload?.name}`, 'success');
-      if (App.state.activeRoute === 'players') Players.render();
-      break;
-    case 'ROOM_CREATED':
-      Toast.show(`🔨 New auction room: ${payload?.name}`, 'info');
-      if (App.state.activeRoute === 'auction') Auction.render();
-      break;
-    case 'TOURNAMENT_CREATED':
-      Toast.show(`🏆 New tournament: ${payload?.name}`, 'info');
-      if (App.state.activeRoute === 'tournament') Tournament.render();
-      break;
+    case 'SCORE_UPDATE': Toast.show('📊 Live score updated!', 'info'); break;
+    case 'MATCH_CREATED': Toast.show(`🏏 New match started: ${payload?.name || ''}`, 'info'); break;
+    case 'BID_UPDATE': Toast.show(`💰 New bid: ₹${(payload?.amount || 0).toLocaleString('en-IN')}`, 'info'); break;
+    case 'PLAYER_REGISTERED': Toast.show(`👤 New player registered: ${payload?.name}`, 'success'); break;
+    case 'ROOM_CREATED': Toast.show(`🔨 New auction room: ${payload?.name}`, 'info'); break;
+    case 'TOURNAMENT_CREATED': Toast.show(`🏆 New tournament: ${payload?.name}`, 'info'); break;
   }
 };
 
@@ -241,6 +269,10 @@ const Home = {
       ${liveMatches.map(m => this.liveMatchCard(m)).join('')}` : ''}
       ${this.recentMatches()}
       ${this.topPerformers()}
+      
+      <div style="text-align:center; margin-top: 3rem;">
+         <button class="btn btn-outline btn-sm" onclick="AuthUI.logout()">Logout</button>
+      </div>
     </div>`;
     this.updateTicker();
   },
@@ -329,7 +361,7 @@ function updateLivePill() {
 }
 
 /* ============================================================
-   8. PLAYERS (UPDATED WITH DIRECT AUCTION ENTRY)
+   8. PLAYERS (WITH DIRECT AUCTION ENTRY)
    ============================================================ */
 const Players = {
   filter: { role: 'all', search: '', sort: 'name' },
@@ -429,7 +461,6 @@ const Players = {
   },
 
   openRegister() {
-    // Check if there are any active/upcoming auction rooms to populate the dropdown
     const openRooms = App.state.auctionRooms.filter(r => r.status !== 'completed');
     const roomOptions = openRooms.map(r => `<option value="${r.id}">${escHtml(r.name)}</option>`).join('');
 
@@ -453,7 +484,6 @@ const Players = {
         </div>
       </div>
       
-      <!-- NEW DIRECT MATCHMAKING FEATURE -->
       ${openRooms.length > 0 ? `
       <div style="background:rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem;">
         <div class="form-group" style="margin-bottom:0">
@@ -496,7 +526,7 @@ const Players = {
     const name = el('p-name')?.value?.trim();
     const age = el('p-age')?.value;
     const role = el('p-role')?.value;
-    const targetAuctionId = el('p-auction')?.value; // Captures the new dropdown selection
+    const targetAuctionId = el('p-auction')?.value;
 
     if (!name) { Toast.show('Name is required', 'error'); return; }
     if (!role) { Toast.show('Please select a role', 'error'); return; }
@@ -518,7 +548,6 @@ const Players = {
 
     App.state.players.push(player);
 
-    // If the player selected a specific auction room, add them to that room's queue!
     if (targetAuctionId) {
       const room = App.state.auctionRooms.find(r => r.id === targetAuctionId);
       if (room) {
@@ -875,8 +904,9 @@ const Auction = {
     this.openRoom(roomId);
   }
 };
+
 /* ============================================================
-   10. TOURNAMENT (UPDATED WITH DIRECT START & TOSS)
+   10. TOURNAMENT (WITH DIRECT START & TOSS)
    ============================================================ */
 const Tournament = {
   activeId: null,
@@ -1115,7 +1145,6 @@ const Tournament = {
     }
   },
 
-  // NEW: Updated to trigger the prompt if the match is upcoming
   matchRow(m) {
     const isUpcoming = m.status === 'upcoming';
     const clickAction = isUpcoming ? `Tournament.promptStartMatch('${m.id}')` : `QuickMatch.openScoring('${m.id}')`;
@@ -1137,7 +1166,6 @@ const Tournament = {
     </div>`;
   },
 
-  // NEW: "Yes or No" Prompt with Quick Toss feature
   promptStartMatch(matchId) {
     const m = App.state.matches.find(x => x.id === matchId);
     if (!m) return;
@@ -1166,7 +1194,6 @@ const Tournament = {
     `);
   },
 
-  // NEW: Processes the start of the match and routes to live scoring
   startMatch(matchId) {
     const match = App.state.matches.find(x => x.id === matchId);
     if (!match) return;
@@ -1614,7 +1641,6 @@ const QuickMatch = {
     const bowler = inn.bowling?.[inn.bowlerIdx || 0];
     const isExtra = ['wide', 'noball', 'bye', 'legbye'].includes(type);
 
-    // Core Scoring Logic
     inn.total = (inn.total || 0) + runs;
     if (type === 'wide') { inn.extras.wide = (inn.extras.wide || 0) + 1; }
     else if (type === 'noball') { inn.extras.noBall = (inn.extras.noBall || 0) + 1; }
@@ -1646,7 +1672,6 @@ const QuickMatch = {
       this.swapStrike(inn);
     }
 
-    // NEW: Smart Automation calculations (Required Runs & Balls Left)
     const overs = Math.floor((inn.balls || 0) / 6);
     const ballsInOver = (inn.balls || 0) % 6;
     const overStr = `${overs - 1 + (ballsInOver === 0 ? 1 : 0)}.${ballsInOver === 0 ? 6 : ballsInOver}`;
@@ -1656,7 +1681,6 @@ const QuickMatch = {
     const ballsLeft = (match.overs * 6) - (inn.balls || 0);
     const rrr = target && ballsLeft > 0 ? ((required / ballsLeft) * 6).toFixed(1) : null;
 
-    // Trigger Smart Commentary
     const comText = this.generateSmartCommentary(type, runs, striker?.name || 'Batsman', bowler?.name || 'Bowler', required, ballsLeft, rrr);
 
     match.commentary = match.commentary || [];
@@ -1733,7 +1757,6 @@ const QuickMatch = {
     inn.fallOfWickets.push({ score: inn.total, wicket: inn.wickets, batsman: striker?.name || '', at: `${Math.floor(inn.balls / 6)}.${inn.balls % 6}` });
     if (inn.balls % 6 === 0 && inn.balls > 0) { inn.overs = Math.floor(inn.balls / 6); if (bowler) { bowler.overs = (bowler.overs || 0) + 1; bowler.overBalls = 0; } inn.currentOver = []; this.swapStrike(inn); }
 
-    // Wicket Commentary
     const comText = `OUT! ${striker?.name || 'Batsman'} ${type}${fielder ? ' ' + fielder : ''}. Huge breakthrough for ${match.innings[ci === 0 ? 1 : 0].battingTeam}!`;
     match.commentary = match.commentary || [];
     match.commentary.push({ over: `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`, text: comText });
@@ -1947,7 +1970,6 @@ const QuickMatch = {
     }
   },
 
-  // NEW: Smart Automation Commentary 🤖
   generateSmartCommentary(type, runs, batsman, bowler, required, ballsLeft, rrr) {
     const templates = {
       '6': [`SHOT! ${batsman} hits it right out of the ground for SIX! 💥`, `MAXIMUM! ${batsman} launches ${bowler} into the stands!`, `What a hit! ${batsman} clears the boundary with ease. SIX!`],
@@ -1966,7 +1988,6 @@ const QuickMatch = {
     const opts = templates[key] || [`${runs} run${runs !== 1 ? 's' : ''} added.`];
     let baseText = opts[Math.floor(Math.random() * opts.length)];
 
-    // 🧠 The Smart AI layer: Add situational pressure if chasing in the final 5 overs
     if (required !== null && ballsLeft > 0 && ballsLeft <= 30) {
       if (runs >= 4) {
         baseText += ` Crucial boundary! Need ${required} more from ${ballsLeft} balls.`;
@@ -2251,9 +2272,8 @@ const Stats = {
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  // Wait half a second for Firebase to connect, then start Live Sync
   setTimeout(() => {
-    if (window.FirebaseDB) App.initLiveSync();
+    if (window.FirebaseAuth) App.initAuth();
   }, 500);
 
   setTimeout(() => {
@@ -2281,8 +2301,6 @@ document.addEventListener('DOMContentLoaded', () => {
       else Modal.close();
     }
   });
-
-  // Since Firebase pushes updates instantly, we no longer need the 5-second interval timer!
 });
 
 window.navigate = navigate;
@@ -2296,3 +2314,4 @@ window.Home = Home;
 window.Modal = Modal;
 window.Toast = Toast;
 window.el = el;
+window.AuthUI = AuthUI;

@@ -3,83 +3,73 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cricket Hub — Auction, Tournaments & Live Scores</title>
-  <meta name="description"
-    content="The ultimate cricket management platform featuring player auctions, tournament organization, real-time scorecards, stats, and quick matches.">
-  <meta name="keywords" content="cricket, auction, tournament, live score, scorecard, IPL">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap"
-    rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cricket Hub</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-  <!-- ========== LOADER ========== -->
-  <div id="loader" class="loader">
-    <div class="loader-content">
-      <div class="loader-ball">🏏</div>
-      <p class="loader-text">Cricket Hub</p>
-      <div class="loader-bar">
-        <div class="loader-fill"></div>
-      </div>
+  <!-- ========== TOAST CONTAINER ========== -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ========== MODAL ========== -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-close" id="modal-close">✕</div>
+      <div class="modal-body" id="modal-body"></div>
     </div>
   </div>
 
+  <!-- ========== LIVE SCORING OVERLAY ========== -->
+  <div class="scoring-overlay" id="scoring-overlay">
+    <div class="scoring-panel" id="scoring-panel"></div>
+  </div>
+
+  <!-- ========== LOADER ========== -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div style="margin-top:1rem;font-weight:700;color:var(--text);letter-spacing:1px">LOADING ENGINE</div>
+  </div>
+
   <!-- ========== NAVBAR ========== -->
-  <nav class="navbar" id="navbar">
-    <div class="nav-brand" data-route="home">
-      <span class="brand-icon">🏏</span>
-      <span class="brand-name">Cricket<span class="brand-accent">Hub</span></span>
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-brand" onclick="navigate('home')">
+        <div class="nav-logo">🏏</div>
+        <div>Cricket<span class="accent">Hub</span></div>
+      </div>
+      <div class="nav-links">
+        <a href="#" class="nav-link" data-route="home" id="nav-home">Home</a>
+        <a href="#" class="nav-link" data-route="players" id="nav-players">Players</a>
+        <a href="#" class="nav-link" data-route="auction" id="nav-auction">Auction</a>
+        <a href="#" class="nav-link" data-route="tournament" id="nav-tournament">Tournaments</a>
+        <a href="#" class="nav-link" data-route="quickmatch" id="nav-quickmatch">Quick Match</a>
+        <a href="#" class="nav-link" data-route="scores" id="nav-scores">
+          Live Scores
+          <div class="live-pill" id="live-pill">
+            <div class="pulse-dot"></div><span id="live-count">0</span>
+          </div>
+        </a>
+        <a href="#" class="nav-link" data-route="stats" id="nav-stats">Stats Hub</a>
+      </div>
+      <div class="hamburger" id="hamburger">☰</div>
     </div>
-    <div class="live-pill" id="live-pill" style="display:none">
-      <span class="pulse-dot"></span>
-      <span id="live-count">0</span> LIVE
-    </div>
-    <div class="nav-links" id="nav-links">
-      <a class="nav-link active" data-route="home" id="nav-home">
-        <span class="nav-icon">🏠</span><span>Home</span>
-      </a>
-      <a class="nav-link" data-route="players" id="nav-players">
-        <span class="nav-icon">👤</span><span>Players</span>
-      </a>
-      <a class="nav-link" data-route="auction" id="nav-auction">
-        <span class="nav-icon">🔨</span><span>Auction</span>
-      </a>
-      <a class="nav-link" data-route="tournament" id="nav-tournament">
-        <span class="nav-icon">🏆</span><span>Tournaments</span>
-      </a>
-      <a class="nav-link" data-route="quickmatch" id="nav-quickmatch">
-        <span class="nav-icon">⚡</span><span>Quick Match</span>
-      </a>
-      <a class="nav-link" data-route="scores" id="nav-scores">
-        <span class="nav-icon">📊</span><span>Live Scores</span>
-      </a>
-      <a class="nav-link" data-route="stats" id="nav-stats">
-        <span class="nav-icon">📈</span><span>Stats Hub</span>
-      </a>
-    </div>
-    <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
-      <span></span><span></span><span></span>
-    </button>
   </nav>
 
   <!-- ========== MOBILE NAV ========== -->
   <div class="mobile-nav" id="mobile-nav">
-    <a class="mobile-nav-link" data-route="home">🏠 Home</a>
-    <a class="mobile-nav-link" data-route="players">👤 Players</a>
-    <a class="mobile-nav-link" data-route="auction">🔨 Auction</a>
-    <a class="mobile-nav-link" data-route="tournament">🏆 Tournaments</a>
-    <a class="mobile-nav-link" data-route="quickmatch">⚡ Quick Match</a>
-    <a class="mobile-nav-link" data-route="scores">📊 Live Scores</a>
-    <a class="mobile-nav-link" data-route="stats">📈 Stats Hub</a>
+    <a href="#" class="mobile-nav-link" data-route="home">🏠 Home</a>
+    <a href="#" class="mobile-nav-link" data-route="players">👤 Players</a>
+    <a href="#" class="mobile-nav-link" data-route="auction">🔨 Auction</a>
+    <a href="#" class="mobile-nav-link" data-route="tournament">🏆 Tournaments</a>
+    <a href="#" class="mobile-nav-link" data-route="quickmatch">⚡ Quick Match</a>
+    <a href="#" class="mobile-nav-link" data-route="scores">📊 Live Scores</a>
+    <a href="#" class="mobile-nav-link" data-route="stats">📈 Stats Hub</a>
   </div>
 
-  <!-- ========== MAIN ========== -->
-  <main class="main" id="main">
+  <!-- ========== MAIN CONTENT ========== -->
+  <main class="main-content">
     <section id="section-home" class="section active"></section>
     <section id="section-players" class="section"></section>
     <section id="section-auction" class="section"></section>
@@ -89,27 +79,11 @@
     <section id="section-stats" class="section"></section>
   </main>
 
-  <!-- ========== MODAL ========== -->
-  <div class="modal-overlay" id="modal-overlay">
-    <div class="modal-box" id="modal-box">
-      <button class="modal-close-btn" id="modal-close">✕</button>
-      <div class="modal-body" id="modal-body"></div>
-    </div>
-  </div>
-
-  <!-- ========== SCORING OVERLAY ========== -->
-  <div class="scoring-overlay" id="scoring-overlay">
-    <div class="scoring-panel" id="scoring-panel"></div>
-  </div>
-
-  <!-- ========== TOAST CONTAINER ========== -->
-  <div class="toast-container" id="toast-container"></div>
-
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <!-- ========== FIREBASE CONNECTION ========== -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBTCoPO81upDrJrIchLlx3yRbDb32fNFIM",
@@ -120,15 +94,20 @@
       appId: "1:104919674106:web:a81427725c28d9d6382d43"
     };
 
-    // Start Firebase and attach it to the window
     const app = initializeApp(firebaseConfig);
+
     window.FirebaseDB = getDatabase(app);
     window.FirebaseRef = ref;
     window.FirebaseOnValue = onValue;
     window.FirebaseSet = set;
+
+    window.FirebaseAuth = getAuth(app);
+    window.FirebaseSignIn = signInWithEmailAndPassword;
+    window.FirebaseSignUp = createUserWithEmailAndPassword;
+    window.FirebaseOnAuth = onAuthStateChanged;
+    window.FirebaseSignOut = signOut;
   </script>
 
-  <!-- Load Main App (Using defer ensures Firebase loads first) -->
   <script src="app.js" defer></script>
 </body>
 
