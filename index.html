@@ -85,13 +85,16 @@
     import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
     const firebaseConfig = {
-      apiKey: "AIzaSyBTCoPO81upDrJrIchLlx3yRbDb32fNFIM",
+      apiKey: "AIzaSyBTCoPO81upDrJrIchLlx3yRbDb32fNfIM",
       authDomain: "crickethub-8d128.firebaseapp.com",
+      databaseURL: "https://crickethub-8d128-default-rtdb.firebaseio.com",
       projectId: "crickethub-8d128",
       storageBucket: "crickethub-8d128.firebasestorage.app",
       messagingSenderId: "104919674106",
-      appId: "1:104919674106:web:a81427725c28d9d6382d43"
+      appId: "1:104919674106:web:a81427725c28d9d6382d43",
+      measurementId: "G-0RHT3DYTE3"
     };
 
     const app = initializeApp(firebaseConfig);
