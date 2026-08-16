@@ -1,11 +1,14 @@
 /* ============================================================
    CRICKET HUB — APP.JS
-   Full SPA logic with Real-time Firebase Sync & Auth!
+   Full SPA logic with Real-time Firebase Sync, Auth, & ADMIN CONTROLS!
    ============================================================ */
 'use strict';
 
+// 👑 MASTER ADMIN EMAIL - Only this email gets edit access!
+const ADMIN_EMAIL = "shivamsanjaysaroj654@gmail.com";
+
 /* ============================================================
-   1. STATE & PERSISTENCE (LIVE FIREBASE SYNC + AUTH)
+   1. STATE & PERSISTENCE
    ============================================================ */
 const App = {
   state: {
@@ -16,7 +19,8 @@ const App = {
     notifications: [],
     activeRoute: 'home',
     activeScoringMatchId: null,
-    currentUser: null
+    currentUser: null,
+    isAdmin: false // Tracks if the logged-in user is the boss
   },
 
   initAuth() {
@@ -25,11 +29,21 @@ const App = {
     window.FirebaseOnAuth(window.FirebaseAuth, (user) => {
       if (user) {
         App.state.currentUser = user.email;
+        // Check if the logged-in user is the master admin
+        App.state.isAdmin = (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+
         Modal.close();
-        Toast.show(`Welcome back, ${user.email.split('@')[0]}!`, 'success');
+
+        if (App.state.isAdmin) {
+          Toast.show(`Welcome Admin! Full access granted.`, 'success');
+        } else {
+          Toast.show(`Welcome! You are in Viewer Mode.`, 'info');
+        }
+
         App.initLiveSync();
       } else {
         App.state.currentUser = null;
+        App.state.isAdmin = false;
         AuthUI.showLogin();
       }
     });
@@ -60,7 +74,9 @@ const App = {
   },
 
   save() {
-    if (!window.FirebaseDB || !App.state.currentUser) return;
+    // SECURITY WALL: Only save if the user is logged in AND is the Admin
+    if (!window.FirebaseDB || !App.state.currentUser || !App.state.isAdmin) return;
+
     const dbRef = window.FirebaseRef(window.FirebaseDB, 'crickethub_live_data');
     window.FirebaseSet(dbRef, {
       players: App.state.players,
@@ -82,11 +98,11 @@ const AuthUI = {
   showLogin() {
     Modal.open(`
       <div style="text-align:center; margin-bottom:1.5rem;">
-        <div style="font-size:3rem;">🔐</div>
-        <h2 class="modal-title">Admin Access Required</h2>
-        <p style="color:var(--text-2); font-size:0.9rem;">Please log in to manage Cricket Hub</p>
+        <div style="font-size:3rem;">🏏</div>
+        <h2 class="modal-title">Welcome to Cricket Hub</h2>
+        <p style="color:var(--text-2); font-size:0.9rem;">Please log in or create an account to enter</p>
       </div>
-      <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="auth-email" placeholder="admin@crickethub.com"></div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="auth-email" placeholder="your@email.com"></div>
       <div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="auth-pass" placeholder="••••••••"></div>
       
       <button class="btn btn-primary btn-full" style="margin-bottom:0.5rem" onclick="AuthUI.login()">Login</button>
@@ -238,12 +254,15 @@ const Home = {
       <div class="hero-content">
         <div class="hero-badge">🏏 India's #1 Cricket Management Platform</div>
         <h1 class="hero-title">Where Cricket<br><span class="accent">Legends</span> Are Made</h1>
-        <p class="hero-desc">Register players, run auctions, organize tournaments, and follow live ball-by-ball scores — all in one place.</p>
+        <p class="hero-desc">Follow live ball-by-ball scores, tournaments, and real-time auctions.</p>
+        
+        ${App.state.isAdmin ? `
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg" onclick="navigate('players')">👤 Register Player</button>
           <button class="btn btn-outline btn-lg" onclick="navigate('quickmatch')">⚡ Quick Match</button>
           <button class="btn btn-ghost btn-lg" onclick="navigate('auction')">🔨 Start Auction</button>
-        </div>
+        </div>` : ''}
+
         <div class="hero-stats">
           <div class="hero-stat"><div class="hero-stat-val">${s.players.length}</div><div class="hero-stat-lbl">Registered Players</div></div>
           <div class="hero-stat"><div class="hero-stat-val">${s.auctionRooms.length}</div><div class="hero-stat-lbl">Auction Rooms</div></div>
@@ -255,7 +274,9 @@ const Home = {
       </div>
     </div>
     <div class="container">
-      <div class="section-header mt-3"><h2 class="section-title">Quick Actions</h2></div>
+      
+      ${App.state.isAdmin ? `
+      <div class="section-header mt-3"><h2 class="section-title">Quick Actions (Admin)</h2></div>
       <div class="home-grid">
         ${this.actionCard('👤', 'Register Player', 'Add yourself or your players to the auction pool with full stats.', 'players')}
         ${this.actionCard('🔨', 'Create Auction Room', 'Set up an IPL-style auction room. Share the room code with others.', 'auction')}
@@ -263,7 +284,8 @@ const Home = {
         ${this.actionCard('⚡', 'Quick Match', 'Set up a match in 60 seconds. Full live scoring with ball-by-ball commentary.', 'quickmatch')}
         ${this.actionCard('📊', 'Live Scores', 'Watch real-time ball-by-ball updates for all ongoing matches.', 'scores')}
         ${this.actionCard('📈', 'Stats Hub', 'Leaderboards, emerging players, most sixes, best bowling & more.', 'stats')}
-      </div>
+      </div>` : ''}
+
       ${liveMatches.length ? `
       <div class="section-header mt-3"><h2 class="section-title">🔴 Live Now</h2></div>
       ${liveMatches.map(m => this.liveMatchCard(m)).join('')}` : ''}
@@ -271,6 +293,7 @@ const Home = {
       ${this.topPerformers()}
       
       <div style="text-align:center; margin-top: 3rem;">
+         <div style="font-size:0.8rem; color:var(--text-3); margin-bottom: 0.5rem;">Logged in as: ${App.state.currentUser} ${App.state.isAdmin ? '(Admin)' : '(Viewer)'}</div>
          <button class="btn btn-outline btn-sm" onclick="AuthUI.logout()">Logout</button>
       </div>
     </div>`;
@@ -361,7 +384,7 @@ function updateLivePill() {
 }
 
 /* ============================================================
-   8. PLAYERS (WITH DIRECT AUCTION ENTRY)
+   8. PLAYERS 
    ============================================================ */
 const Players = {
   filter: { role: 'all', search: '', sort: 'name' },
@@ -374,7 +397,7 @@ const Players = {
           <h1 class="section-title"><span class="icon">👤</span> Players Registry</h1>
           <div class="section-subtitle">${App.state.players.length} players registered</div>
         </div>
-        <button class="btn btn-primary" onclick="Players.openRegister()">+ Register Player</button>
+        ${App.state.isAdmin ? `<button class="btn btn-primary" onclick="Players.openRegister()">+ Register Player</button>` : ''}
       </div>
       <div class="search-bar">
         <div class="search-input-wrap">
@@ -419,7 +442,7 @@ const Players = {
     const grid = el('players-grid');
     if (!grid) return;
     if (!list.length) {
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👤</div><div class="empty-title">No players found</div><div class="empty-desc">Register your first player to get started.</div><button class="btn btn-primary" onclick="Players.openRegister()">+ Register Player</button></div>`;
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👤</div><div class="empty-title">No players found</div><div class="empty-desc">Players will appear here once registered.</div></div>`;
       return;
     }
     grid.innerHTML = list.map(p => this.playerCard(p)).join('');
@@ -461,6 +484,7 @@ const Players = {
   },
 
   openRegister() {
+    if (!App.state.isAdmin) return;
     const openRooms = App.state.auctionRooms.filter(r => r.status !== 'completed');
     const roomOptions = openRooms.map(r => `<option value="${r.id}">${escHtml(r.name)}</option>`).join('');
 
@@ -523,6 +547,7 @@ const Players = {
   },
 
   register() {
+    if (!App.state.isAdmin) return;
     const name = el('p-name')?.value?.trim();
     const age = el('p-age')?.value;
     const role = el('p-role')?.value;
@@ -613,11 +638,10 @@ const Auction = {
       <div class="section-header">
         <div>
           <h1 class="section-title"><span class="icon">🔨</span> Auction Rooms</h1>
-          <div class="section-subtitle">Create or join an IPL-style cricket auction</div>
+          <div class="section-subtitle">Live IPL-style cricket auctions</div>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-          <button class="btn btn-outline" onclick="Auction.openJoin()">🔗 Join Room</button>
-          <button class="btn btn-primary" onclick="Auction.openCreate()">+ Create Room</button>
+          ${App.state.isAdmin ? `<button class="btn btn-primary" onclick="Auction.openCreate()">+ Create Room</button>` : ''}
         </div>
       </div>
       ${this.renderRooms()}
@@ -626,7 +650,7 @@ const Auction = {
 
   renderRooms() {
     const rooms = App.state.auctionRooms;
-    if (!rooms.length) return `<div class="empty-state"><div class="empty-icon">🔨</div><div class="empty-title">No Auction Rooms Yet</div><div class="empty-desc">Create the first auction room and invite teams to bid!</div><button class="btn btn-primary" onclick="Auction.openCreate()">+ Create Room</button></div>`;
+    if (!rooms.length) return `<div class="empty-state"><div class="empty-icon">🔨</div><div class="empty-title">No Auction Rooms Yet</div><div class="empty-desc">Rooms will appear here when the Admin creates them.</div></div>`;
     return `<div class="grid-2">${rooms.map(r => this.roomCard(r)).join('')}</div>`;
   },
 
@@ -660,6 +684,7 @@ const Auction = {
   },
 
   openCreate() {
+    if (!App.state.isAdmin) return;
     Modal.open(`
       <h2 class="modal-title">🔨 Create Auction Room</h2>
       <div class="form-group"><label class="form-label">Room Name *</label><input class="form-input" id="r-name" placeholder="IPL Mega Auction 2026"></div>
@@ -684,6 +709,7 @@ const Auction = {
   },
 
   createRoom() {
+    if (!App.state.isAdmin) return;
     const name = el('r-name')?.value?.trim();
     const myTeam = el('r-myteam')?.value?.trim();
     if (!name) { Toast.show('Room name required', 'error'); return; }
@@ -713,34 +739,6 @@ const Auction = {
     this.render();
   },
 
-  openJoin() {
-    Modal.open(`
-      <h2 class="modal-title">🔗 Join Auction Room</h2>
-      <div class="form-group"><label class="form-label">Room Code *</label><input class="form-input" id="join-code" placeholder="ABC123" style="text-transform:uppercase;font-family:'Roboto Mono',monospace;letter-spacing:3px;font-size:1.2rem"></div>
-      <div class="form-group"><label class="form-label">Your Team Name *</label><input class="form-input" id="join-team" placeholder="Chennai Super Kings"></div>
-      <button class="btn btn-primary btn-full" onclick="Auction.joinRoom()">Join Room</button>
-    `);
-    const ci = el('join-code'); if (ci) ci.addEventListener('input', () => { ci.value = ci.value.toUpperCase(); });
-  },
-
-  joinRoom() {
-    const code = el('join-code')?.value?.trim().toUpperCase();
-    const teamName = el('join-team')?.value?.trim();
-    if (!code || !teamName) { Toast.show('Fill all fields', 'error'); return; }
-    const room = App.state.auctionRooms.find(r => r.code === code);
-    if (!room) { Toast.show('Room not found. Check the code!', 'error'); return; }
-    if (room.status === 'completed') { Toast.show('This auction is already completed', 'error'); return; }
-    if ((room.teams || []).length >= room.maxTeams) { Toast.show('Room is full', 'error'); return; }
-    if (room.teams.some(t => t.name.toLowerCase() === teamName.toLowerCase())) { Toast.show('Team name already taken', 'error'); return; }
-    room.teams.push({ name: teamName, budget: room.budget, players: [], spent: 0 });
-    App.save();
-    App.broadcast({ type: 'BID_UPDATE', payload: { amount: 0 } });
-    Modal.close();
-    Toast.show(`✅ Joined room as ${teamName}!`, 'success');
-    this.openRoom(room.id);
-    this.render();
-  },
-
   openRoom(roomId) {
     const room = App.state.auctionRooms.find(r => r.id === roomId);
     if (!room) return;
@@ -766,17 +764,20 @@ const Auction = {
       <div style="color:var(--gold);font-size:.85rem;margin:.3rem 0">${escHtml(currentPlayer.role || '')}</div>
       <div class="bid-amount">₹${fmt(room.currentBid || room.basePrice)}&nbsp;L</div>
       ${lastBid ? `<div style="font-size:.82rem;color:var(--text-2);margin-top:.5rem">Leading: <strong style="color:var(--gold)">${escHtml(lastBid.team)}</strong></div>` : ''}
+      
+      ${App.state.isAdmin ? `
       <div class="bid-teams" style="margin-top:1rem">
         ${(room.teams || []).map(t => `<button class="team-chip ${lastBid?.team === t.name ? 'leading' : ''}" onclick="Auction.placeBid('${room.id}','${escHtml(t.name)}')">${escHtml(t.name)}<br><small>₹${fmt(t.budget)}&nbsp;L left</small></button>`).join('')}
       </div>
       <div style="display:flex;gap:.5rem;justify-content:center;margin-top:1rem;flex-wrap:wrap">
         <button class="btn btn-green btn-sm" onclick="Auction.sellPlayer('${room.id}')">✅ Sell</button>
         <button class="btn btn-ghost btn-sm" onclick="Auction.passPlayer('${room.id}')">⏭ Unsold / Pass</button>
-      </div>
+      </div>` : `<div style="margin-top:1rem; color:var(--text-3); font-size:0.85rem;">Waiting for Admin to process bid...</div>`}
+      
     </div>` : `<div style="text-align:center;padding:2rem;background:var(--surface-2);border-radius:var(--radius-lg);margin-bottom:1rem">
       <div style="font-size:2rem;margin-bottom:.5rem">🔨</div>
       <div style="font-weight:700;margin-bottom:.5rem">No player up for bidding</div>
-      <button class="btn btn-primary" onclick="Auction.nextPlayer('${room.id}')">▶ Start Bidding</button>
+      ${App.state.isAdmin ? `<button class="btn btn-primary" onclick="Auction.nextPlayer('${room.id}')">▶ Start Bidding</button>` : `<div style="color:var(--text-3); font-size:0.85rem;">Waiting for Admin to start...</div>`}
     </div>`}
 
     <div class="tabs" style="margin-top:1.5rem">
@@ -794,7 +795,7 @@ const Auction = {
             <span style="font-size:1.4rem">${p.photo || '🏏'}</span>
             <div style="flex:1"><div style="font-weight:600;font-size:.88rem">${escHtml(p.name)}</div><div style="font-size:.72rem;color:var(--gold)">${escHtml(p.role || '')}</div></div>
             <div style="font-size:.78rem;color:var(--text-2)">Base: ₹${fmt(room.basePrice)}&nbsp;L</div>
-            <button class="btn btn-ghost btn-sm" onclick="Auction.setBidPlayer('${room.id}','${pid}')">Bid</button>
+            ${App.state.isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="Auction.setBidPlayer('${room.id}','${pid}')">Bid</button>` : ''}
           </div>`;
     }).join('')}
         ${playerQueue.length === 0 ? `<div class="empty-state" style="padding:1.5rem"><div class="empty-title">Queue is empty</div></div>` : ''}
@@ -834,6 +835,7 @@ const Auction = {
   },
 
   setBidPlayer(roomId, playerId) {
+    if (!App.state.isAdmin) return;
     const room = App.state.auctionRooms.find(r => r.id === roomId);
     if (!room) return;
     room.currentPlayer = playerId;
@@ -845,6 +847,7 @@ const Auction = {
   },
 
   nextPlayer(roomId) {
+    if (!App.state.isAdmin) return;
     const room = App.state.auctionRooms.find(r => r.id === roomId);
     if (!room) return;
     const queue = (room.playerQueue || []).filter(pid => !room.soldLog?.some(s => s.playerId === pid) && pid !== room.currentPlayer);
@@ -858,6 +861,7 @@ const Auction = {
   },
 
   placeBid(roomId, teamName) {
+    if (!App.state.isAdmin) return;
     const room = App.state.auctionRooms.find(r => r.id === roomId);
     if (!room || !room.currentPlayer) { Toast.show('No player up for bidding', 'error'); return; }
     const team = room.teams.find(t => t.name === teamName);
@@ -874,6 +878,7 @@ const Auction = {
   },
 
   sellPlayer(roomId) {
+    if (!App.state.isAdmin) return;
     const room = App.state.auctionRooms.find(r => r.id === roomId);
     if (!room || !room.currentPlayer) return;
     const lastBid = room.bids?.[room.bids.length - 1];
@@ -892,6 +897,7 @@ const Auction = {
   },
 
   passPlayer(roomId) {
+    if (!App.state.isAdmin) return;
     const room = App.state.auctionRooms.find(r => r.id === roomId);
     if (!room || !room.currentPlayer) return;
     const player = App.state.players.find(p => p.id === room.currentPlayer);
@@ -906,7 +912,7 @@ const Auction = {
 };
 
 /* ============================================================
-   10. TOURNAMENT (WITH DIRECT START & TOSS)
+   10. TOURNAMENT 
    ============================================================ */
 const Tournament = {
   activeId: null,
@@ -920,9 +926,9 @@ const Tournament = {
           <h1 class="section-title"><span class="icon">🏆</span> Tournaments</h1>
           <div class="section-subtitle">${ts.length} tournaments organized</div>
         </div>
-        <button class="btn btn-primary" onclick="Tournament.openCreate()">+ New Tournament</button>
+        ${App.state.isAdmin ? `<button class="btn btn-primary" onclick="Tournament.openCreate()">+ New Tournament</button>` : ''}
       </div>
-      ${!ts.length ? `<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">No Tournaments Yet</div><div class="empty-desc">Organize your first cricket tournament with automatic scheduling.</div><button class="btn btn-primary" onclick="Tournament.openCreate()">+ Create Tournament</button></div>` :
+      ${!ts.length ? `<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">No Tournaments Yet</div><div class="empty-desc">Tournaments will appear here when the Admin creates them.</div></div>` :
         `<div class="grid-2">${ts.map(t => this.tournCard(t)).join('')}</div>`}
     </div>`;
   },
@@ -950,6 +956,7 @@ const Tournament = {
   },
 
   openCreate() {
+    if (!App.state.isAdmin) return;
     Modal.open(`
       <h2 class="modal-title">🏆 New Tournament</h2>
       <div class="form-group"><label class="form-label">Tournament Name *</label><input class="form-input" id="t-name" placeholder="Summer Cricket League 2026"></div>
@@ -990,6 +997,7 @@ const Tournament = {
   },
 
   create() {
+    if (!App.state.isAdmin) return;
     const name = el('t-name')?.value?.trim();
     const format = el('t-format')?.value;
     const teamsRaw = el('t-teams')?.value;
@@ -1077,9 +1085,12 @@ const Tournament = {
         <div class="tab" onclick="Tournament.switchTab(this,'td-stats')">⭐ Stats</div>
       </div>
       <div id="td-schedule">
+        
+        ${App.state.isAdmin ? `
         <div style="margin-bottom: 1rem;">
           <button class="btn btn-outline btn-sm" style="width: 100%; border-style: dashed; padding: 0.75rem" onclick="Tournament.openAddMatch('${t.id}')">➕ Direct Matchmaking (Add Custom Match)</button>
-        </div>
+        </div>` : ''}
+
         ${live.length ? `<div style="margin-bottom:1rem"><div style="font-size:.8rem;font-weight:700;color:var(--red-2);margin-bottom:.5rem">🔴 LIVE</div>${live.map(m => this.matchRow(m)).join('')}</div>` : ''}
         ${upcoming.length ? `<div style="margin-bottom:1rem"><div style="font-size:.8rem;font-weight:700;color:var(--text-2);margin-bottom:.5rem">UPCOMING</div>${upcoming.slice(0, 10).map(m => this.matchRow(m)).join('')}</div>` : ''}
         ${done.length ? `<div><div style="font-size:.8rem;font-weight:700;color:var(--text-2);margin-bottom:.5rem">COMPLETED</div>${done.slice().reverse().slice(0, 10).map(m => this.matchRow(m)).join('')}</div>` : ''}
@@ -1090,6 +1101,7 @@ const Tournament = {
   },
 
   openAddMatch(tournId) {
+    if (!App.state.isAdmin) return;
     const t = App.state.tournaments.find(x => x.id === tournId);
     if (!t) return;
     const teamOpts = t.teams.map(team => `<option value="${escHtml(team)}">${escHtml(team)}</option>`).join('');
@@ -1106,6 +1118,7 @@ const Tournament = {
   },
 
   saveAddMatch(tournId) {
+    if (!App.state.isAdmin) return;
     const t = App.state.tournaments.find(x => x.id === tournId);
     const t1 = el('dm-t1')?.value;
     const t2 = el('dm-t2')?.value;
@@ -1122,6 +1135,7 @@ const Tournament = {
   },
 
   editMatchDate(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const dateFormatted = new Date(match.date).toISOString().slice(0, 16);
@@ -1135,6 +1149,7 @@ const Tournament = {
   },
 
   saveMatchDate(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     const newDate = el('edit-date')?.value;
     if (match && newDate) {
@@ -1147,9 +1162,12 @@ const Tournament = {
 
   matchRow(m) {
     const isUpcoming = m.status === 'upcoming';
-    const clickAction = isUpcoming ? `Tournament.promptStartMatch('${m.id}')` : `QuickMatch.openScoring('${m.id}')`;
+    // Only admins can click to start or score. Viewers just see the row.
+    const clickAction = App.state.isAdmin
+      ? (isUpcoming ? `Tournament.promptStartMatch('${m.id}')` : `QuickMatch.openScoring('${m.id}')`)
+      : (isUpcoming ? `` : `Scores.viewScorecard('${m.id}')`);
 
-    return `<div class="match-row" onclick="${clickAction}">
+    return `<div class="match-row" ${clickAction ? `onclick="${clickAction}"` : ''} style="${!clickAction ? 'cursor:default' : ''}">
       <div class="match-teams-row">
         <span class="match-team-name">${escHtml(m.team1)}</span>
         <span class="match-vs">vs</span>
@@ -1160,13 +1178,14 @@ const Tournament = {
         ${m.result ? `<div style="font-size:.75rem;color:var(--text-2)">${escHtml(m.result)}</div>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0">
-        <span class="match-date">${dateStr(m.date)} ${isUpcoming ? `<span style="cursor:pointer; padding: 2px" onclick="event.stopPropagation(); Tournament.editMatchDate('${m.id}')">✏️</span>` : ''}</span>
+        <span class="match-date">${dateStr(m.date)} ${isUpcoming && App.state.isAdmin ? `<span style="cursor:pointer; padding: 2px" onclick="event.stopPropagation(); Tournament.editMatchDate('${m.id}')">✏️</span>` : ''}</span>
         <span class="match-status-badge ${m.status === 'live' ? 'match-live' : m.status === 'completed' ? 'match-done' : 'match-upcoming'}">${m.status === 'live' ? '● LIVE' : m.status === 'completed' ? '✓ Done' : 'Upcoming'}</span>
       </div>
     </div>`;
   },
 
   promptStartMatch(matchId) {
+    if (!App.state.isAdmin) return;
     const m = App.state.matches.find(x => x.id === matchId);
     if (!m) return;
     Modal.open(`
@@ -1195,6 +1214,7 @@ const Tournament = {
   },
 
   startMatch(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(x => x.id === matchId);
     if (!match) return;
 
@@ -1350,14 +1370,17 @@ const QuickMatch = {
   render() {
     const sec = el('section-quickmatch');
     const matches = App.state.matches.filter(m => !m.tournamentId);
+
     sec.innerHTML = `<div class="container">
       <div class="section-header">
         <div>
           <h1 class="section-title"><span class="icon">⚡</span> Quick Match</h1>
-          <div class="section-subtitle">Set up & score a match in under 60 seconds</div>
+          <div class="section-subtitle">Casual matches & automated simulations</div>
         </div>
-        <button class="btn btn-primary" onclick="QuickMatch.openCreate()">+ New Match</button>
+        ${App.state.isAdmin ? `<button class="btn btn-primary" onclick="QuickMatch.openCreate()">+ New Match</button>` : ''}
       </div>
+      
+      ${App.state.isAdmin ? `
       <div class="grid-2">
         <div class="card" style="text-align:center;padding:2.5rem">
           <div style="font-size:3rem;margin-bottom:1rem">⚡</div>
@@ -1371,16 +1394,18 @@ const QuickMatch = {
           <p style="color:var(--text-2);font-size:.88rem;margin-bottom:1.5rem;line-height:1.6">Auto-simulate a cricket match with generated scores and statistics.</p>
           <button class="btn btn-outline btn-full" onclick="QuickMatch.simulate()">Simulate Match</button>
         </div>
-      </div>
+      </div>` : ''}
+
       ${matches.length ? `
-      <div class="section-header mt-3"><h2 class="section-title">🏏 Your Matches</h2></div>
+      <div class="section-header mt-3"><h2 class="section-title">🏏 Quick Matches</h2></div>
       <div style="display:flex;flex-direction:column;gap:.5rem">
         ${matches.slice().reverse().map(m => Tournament.matchRow(m)).join('')}
-      </div>`: ''}
+      </div>`: (!App.state.isAdmin ? `<div class="empty-state"><div class="empty-icon">🏏</div><div class="empty-title">No Matches Yet</div></div>` : '')}
     </div>`;
   },
 
   openCreate() {
+    if (!App.state.isAdmin) return;
     Modal.open(`
       <h2 class="modal-title">⚡ Quick Match Setup</h2>
       <div class="form-row">
@@ -1428,6 +1453,7 @@ const QuickMatch = {
   },
 
   create() {
+    if (!App.state.isAdmin) return;
     const t1 = el('qm-t1')?.value?.trim();
     const t2 = el('qm-t2')?.value?.trim();
     if (!t1 || !t2) { Toast.show('Both team names required', 'error'); return; }
@@ -1476,6 +1502,7 @@ const QuickMatch = {
   },
 
   simulate() {
+    if (!App.state.isAdmin) return;
     const teamPairs = [['India', 'Australia'], ['Pakistan', 'England'], ['South Africa', 'New Zealand'], ['West Indies', 'Sri Lanka']];
     const [t1, t2] = teamPairs[Math.floor(Math.random() * teamPairs.length)];
     const names1 = ['Rohit', 'Virat', 'KL Rahul', 'Hardik', 'Jadeja', 'Dhoni', 'Bumrah', 'Shami', 'Kuldeep', 'Siraj', 'Axar'];
@@ -1518,6 +1545,7 @@ const QuickMatch = {
   },
 
   openScoring(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     App.state.activeScoringMatchId = matchId;
@@ -1632,6 +1660,7 @@ const QuickMatch = {
   },
 
   addBall(matchId, runs, type) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const ci = match.currentInnings || 0;
@@ -1704,6 +1733,7 @@ const QuickMatch = {
   },
 
   addWicket(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const ci = match.currentInnings || 0;
@@ -1725,6 +1755,7 @@ const QuickMatch = {
   },
 
   confirmWicket(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const ci = match.currentInnings || 0;
@@ -1772,6 +1803,7 @@ const QuickMatch = {
   },
 
   changeBatsmen(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn = match.innings?.[match.currentInnings || 0];
@@ -1782,6 +1814,7 @@ const QuickMatch = {
   },
 
   changeBowler(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn = match.innings?.[match.currentInnings || 0];
@@ -1796,6 +1829,7 @@ const QuickMatch = {
   },
 
   confirmChangeBowler(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn = match.innings?.[match.currentInnings || 0];
@@ -1815,6 +1849,7 @@ const QuickMatch = {
   },
 
   undoLast(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn = match.innings?.[match.currentInnings || 0];
@@ -1829,6 +1864,7 @@ const QuickMatch = {
   },
 
   promptEndInnings(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const ci = match.currentInnings || 0;
@@ -1854,6 +1890,7 @@ const QuickMatch = {
   endInnings(matchId) { this.promptEndInnings(matchId); },
 
   startSecondInnings(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn1 = match.innings?.[0];
@@ -1885,6 +1922,7 @@ const QuickMatch = {
   },
 
   declareResult(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn1 = match.innings?.[0];
@@ -1911,6 +1949,7 @@ const QuickMatch = {
   },
 
   finalizeResult(matchId) {
+    if (!App.state.isAdmin) return;
     const match = App.state.matches.find(m => m.id === matchId);
     if (!match) return;
     const inn1 = match.innings?.[0]; const inn2 = match.innings?.[1];
@@ -2014,7 +2053,7 @@ const Scores = {
           <h1 class="section-title"><span class="icon">📊</span> Live Scores</h1>
           <div class="section-subtitle">${live.length} live • ${done.length} completed</div>
         </div>
-        <button class="btn btn-primary" onclick="QuickMatch.openCreate()">+ New Match</button>
+        ${App.state.isAdmin ? `<button class="btn btn-primary" onclick="QuickMatch.openCreate()">+ New Match</button>` : ''}
       </div>
       ${live.length ? `
       <h3 style="font-size:1rem;font-weight:700;color:var(--red-2);margin-bottom:.75rem">🔴 Live Matches</h3>
@@ -2022,7 +2061,7 @@ const Scores = {
       ${done.length ? `
       <h3 style="font-size:1rem;font-weight:700;color:var(--text-2);margin:1.5rem 0 .75rem">✅ Completed</h3>
       ${done.map(m => this.matchCard(m, false)).join('')}` : ''}
-      ${!live.length && !done.length ? `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">No Matches Yet</div><div class="empty-desc">Start a quick match or a tournament match to see live scores here.</div><button class="btn btn-primary" onclick="QuickMatch.openCreate()">+ Quick Match</button></div>` : ''}
+      ${!live.length && !done.length ? `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">No Matches Yet</div><div class="empty-desc">Check back later for live cricket action.</div></div>` : ''}
     </div>`;
   },
 
@@ -2085,7 +2124,7 @@ const Scores = {
         ${m.playerOfMatch ? `<div style="text-align:center;margin-top:.5rem;font-size:.85rem">🏅 Player of the Match: <strong style="color:var(--gold)">${escHtml(m.playerOfMatch)}</strong></div>` : ''}
       </div>
       ${m.innings?.length ? `<div class="tabs">${tabs}</div>${innHtml}` : '<div class="empty-state" style="padding:1rem"><div class="empty-title">No innings data yet</div></div>'}
-      ${m.status === 'live' ? `<div style="margin-top:1rem"><button class="btn btn-primary btn-full" onclick="Modal.close();QuickMatch.openScoring('${m.id}')">📝 Score This Match</button></div>` : ''}
+      ${(m.status === 'live' && App.state.isAdmin) ? `<div style="margin-top:1rem"><button class="btn btn-primary btn-full" onclick="Modal.close();QuickMatch.openScoring('${m.id}')">📝 Score This Match</button></div>` : ''}
     `);
   },
 
@@ -2190,7 +2229,7 @@ const Stats = {
         </div>
       </div>
 
-      ${!allMatches.length ? `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">No Stats Yet</div><div class="empty-desc">Complete a match to see stats, leaderboards, and awards here.</div><button class="btn btn-primary" onclick="navigate('quickmatch')">⚡ Start a Match</button></div>` : `
+      ${!allMatches.length ? `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">No Stats Yet</div><div class="empty-desc">Stats and leaderboards will populate after matches are completed.</div></div>` : `
 
       <!-- Awards Row -->
       <div class="grid-4" style="margin-bottom:2rem">
